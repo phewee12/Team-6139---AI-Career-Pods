@@ -29,10 +29,10 @@ export default function ProfileSetupPage({ user, onSaved }) {
   return (
     <main className="setup-shell">
       <section className="setup-card">
-        <p className="eyebrow">qwyse profile</p>
-        <h1>Tell qwyse who you are</h1>
+        <p className="eyebrow">Qwyse profile</p>
+        <h1>Tell Qwyse who you are</h1>
         <p>
-          This information helps qwyse match you with groups aligned to your stage and goals.
+          This information helps Qwyse match you with groups aligned to your stage and goals.
         </p>
 
         <form className="setup-form" onSubmit={handleSubmit}>

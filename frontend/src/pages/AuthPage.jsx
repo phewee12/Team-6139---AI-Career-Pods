@@ -5,6 +5,7 @@ const initialForm = {
   fullName: "",
   email: "",
   password: "",
+  confirmPassword: "",
 };
 
 export default function AuthPage({ onAuthenticated }) {
@@ -12,6 +13,7 @@ export default function AuthPage({ onAuthenticated }) {
   const [form, setForm] = useState(initialForm);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const title = useMemo(
     () => (mode === "register" ? "Create your account" : "Welcome back"),
@@ -19,6 +21,8 @@ export default function AuthPage({ onAuthenticated }) {
   );
 
   const submitLabel = mode === "register" ? "Create account" : "Sign in";
+  const passwordsMatch = form.password === form.confirmPassword;
+  const canSubmit = mode === "register" ? passwordsMatch && form.confirmPassword.length > 0 : true;
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -27,8 +31,14 @@ export default function AuthPage({ onAuthenticated }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    setPending(true);
     setError("");
+
+    if (mode === "register" && form.password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setPending(true);
 
     try {
       const payload = {
@@ -55,22 +65,22 @@ export default function AuthPage({ onAuthenticated }) {
     <main className="auth-shell">
       <section className="auth-panel">
         <header className="auth-header">
-          <p className="eyebrow">qwyse</p>
+          <p className="eyebrow">Qwyse</p>
           <h1>{title}</h1>
-          <p>Join qwyse to explore focused groups and build momentum in your career journey.</p>
+          <p>Join Qwyse to explore focused groups and build momentum in your career journey.</p>
         </header>
 
         <div className="mode-switch" role="tablist" aria-label="Authentication mode">
           <button
             type="button"
-            className={mode === "register" ? "active" : ""}
+            className={mode === "register" ? "mode-switch-btn mode-register active" : "mode-switch-btn mode-register"}
             onClick={() => setMode("register")}
           >
             Register
           </button>
           <button
             type="button"
-            className={mode === "login" ? "active" : ""}
+            className={mode === "login" ? "mode-switch-btn mode-login active" : "mode-switch-btn mode-login"}
             onClick={() => setMode("login")}
           >
             Login
@@ -107,20 +117,55 @@ export default function AuthPage({ onAuthenticated }) {
 
           <label>
             Password
-            <input
-              type="password"
-              name="password"
-              autoComplete={mode === "register" ? "new-password" : "current-password"}
-              value={form.password}
-              onChange={updateField}
-              minLength={8}
-              required
-            />
+            <div className="password-input-wrap">
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
+                value={form.password}
+                onChange={updateField}
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((current) => !current)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </label>
+
+          {mode === "register" && (
+            <label>
+              Confirm password
+              <div className="password-input-wrap">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="confirmPassword"
+                  autoComplete="new-password"
+                  value={form.confirmPassword}
+                  onChange={updateField}
+                  minLength={8}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Hide confirm password" : "Show confirm password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
+            </label>
+          )}
 
           {error && <p className="error-banner">{error}</p>}
 
-          <button type="submit" className="primary" disabled={pending}>
+          <button type="submit" className="primary" disabled={pending || !canSubmit}>
             {pending ? "Please wait..." : submitLabel}
           </button>
         </form>

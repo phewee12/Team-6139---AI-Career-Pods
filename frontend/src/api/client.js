@@ -51,6 +51,18 @@ export async function getPods() {
   return request("/pods");
 }
 
+export async function joinPod(podId) {
+  return request(`/pods/${podId}/join`, { method: "POST" });
+}
+
+export async function getPodPosts(podId) {
+  return request(`/pods/${podId}/posts`);
+}
+
+export async function createPodPost(podId, input) {
+  return request(`/pods/${podId}/posts`, { method: "POST", body: input });
+}
+
 export function getGoogleAuthUrl() {
   return `${SERVER_URL}/api/auth/google`;
 }

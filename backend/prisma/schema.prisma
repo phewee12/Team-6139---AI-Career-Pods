@@ -12,33 +12,94 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum PodVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum PodMembershipStatus {
+  ACTIVE
+  PENDING
+  REJECTED
+}
+
+enum PodMembershipRole {
+  MEMBER
+  ADMIN
+}
+
 model User {
-  id             String       @id @default(uuid())
-  email          String       @unique
-  passwordHash   String?
-  fullName       String?
-  fieldOfStudy   String?
-  careerStage    String?
-  targetTimeline String?
-  avatarUrl      String?
-  authProvider   AuthProvider @default(LOCAL)
-  googleId       String?      @unique
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                  String          @id @default(uuid())
+  email               String          @unique
+  passwordHash        String?
+  fullName            String?
+  fieldOfStudy        String?
+  careerStage         String?
+  targetTimeline      String?
+  avatarUrl           String?
+  authProvider        AuthProvider    @default(LOCAL)
+  googleId            String?         @unique
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  createdPods         Pod[]           @relation("PodCreatedBy")
+  podMemberships      PodMembership[] @relation("PodMembershipUser")
+  authoredPodPosts    PodPost[]       @relation("PodPostAuthor")
+  reviewedMemberships PodMembership[] @relation("PodMembershipReviewedBy")
 
   @@index([fieldOfStudy])
   @@index([careerStage])
 }
 
 model Pod {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  name        String
-  description String
-  focusArea   String
-  isDefault   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String          @id @default(uuid())
+  slug          String          @unique
+  name          String
+  description   String
+  focusArea     String
+  visibility    PodVisibility   @default(PUBLIC)
+  isDefault     Boolean         @default(true)
+  createdById   String?
+  createdByUser User?           @relation("PodCreatedBy", fields: [createdById], references: [id])
+  memberships   PodMembership[]
+  posts         PodPost[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@index([focusArea])
+  @@index([visibility])
+  @@index([createdById])
+}
+
+model PodPost {
+  id        String   @id @default(uuid())
+  podId     String
+  authorId  String
+  content   String
+  pod       Pod      @relation(fields: [podId], references: [id], onDelete: Cascade)
+  author    User     @relation("PodPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([podId, createdAt])
+  @@index([authorId])
+}
+
+model PodMembership {
+  id            String              @id @default(uuid())
+  podId         String
+  userId        String
+  role          PodMembershipRole   @default(MEMBER)
+  status        PodMembershipStatus @default(PENDING)
+  requestedAt   DateTime            @default(now())
+  joinedAt      DateTime?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  pod           Pod                 @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user          User                @relation("PodMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedByUser User?              @relation("PodMembershipReviewedBy", fields: [reviewedById], references: [id])
+
+  @@unique([podId, userId])
+  @@index([podId, status])
+  @@index([userId, status])
+  @@index([reviewedById])
 }

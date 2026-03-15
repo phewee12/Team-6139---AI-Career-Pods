@@ -1,17 +1,20 @@
 @import url("https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap");
 
 :root {
-  --ink: #253247;
-  --muted: #66758d;
-  --surface: #eef2f7;
+  --ink: #2b1a40;
+  --muted: #6e5a88;
+  --surface: #f6f1ff;
   --panel: #ffffff;
-  --line: #cfd8e6;
-  --line-strong: #aab7cb;
-  --primary: #3f587d;
-  --primary-ink: #eef4ff;
-  --secondary: #dde6f5;
+  --line: #decff1;
+  --line-strong: #c2a8e3;
+  --primary: #560591;
+  --primary-ink: #ffffff;
+  --secondary: #ffffff;
+  --lavender-soft: #ede1ff;
+  --lavender-mist: #f4edff;
+  --lavender-deep: #7c4aae;
   --danger: #bb3030;
-  --shadow: 0 22px 36px rgba(31, 42, 61, 0.08);
+  --shadow: 0 22px 36px rgba(86, 5, 145, 0.12);
 }
 
 * {
@@ -29,8 +32,8 @@ body {
   font-family: "Chivo", "Segoe UI", sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(72rem 40rem at 100% -10%, rgba(224, 232, 246, 0.92) 0%, rgba(224, 232, 246, 0) 62%),
-    radial-gradient(64rem 38rem at -10% 100%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 58%),
+    radial-gradient(72rem 40rem at 100% -10%, rgba(214, 188, 246, 0.72) 0%, rgba(214, 188, 246, 0) 62%),
+    radial-gradient(64rem 38rem at -10% 100%, rgba(245, 236, 255, 0.88) 0%, rgba(245, 236, 255, 0) 58%),
     var(--surface);
 }
 
