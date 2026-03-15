@@ -1,0 +1,38 @@
+{
+  "name": "ai-career-pods",
+  "version": "1.0.0",
+  "description": "Career Pods platform monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "db:up": "docker-compose up -d postgres",
+    "db:down": "docker-compose down",
+    "db:logs": "docker-compose logs postgres",
+    "db:local:start": "powershell -ExecutionPolicy Bypass -File scripts/start-local-postgres.ps1",
+    "db:local:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-postgres.ps1",
+    "db:local:status": "powershell -ExecutionPolicy Bypass -File scripts/status-local-postgres.ps1",
+    "build": "npm run build --workspace frontend",
+    "lint": "npm run lint --workspace frontend",
+    "test:backend": "npm run test --workspace backend"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phewee12/Team-6139---AI-Career-Pods.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/phewee12/Team-6139---AI-Career-Pods/issues"
+  },
+  "homepage": "https://github.com/phewee12/Team-6139---AI-Career-Pods#readme",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

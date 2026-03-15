@@ -1,0 +1,11 @@
+node_modules/
+**/node_modules/
+.env
+.env.*
+!.env.example
+backend/generated/
+frontend/dist/
+*.log
+.DS_Store
+local-pg.log
+local-pgdata/

@@ -1,0 +1,60 @@
+@import url("https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap");
+
+:root {
+  --ink: #253247;
+  --muted: #66758d;
+  --surface: #eef2f7;
+  --panel: #ffffff;
+  --line: #cfd8e6;
+  --line-strong: #aab7cb;
+  --primary: #3f587d;
+  --primary-ink: #eef4ff;
+  --secondary: #dde6f5;
+  --danger: #bb3030;
+  --shadow: 0 22px 36px rgba(31, 42, 61, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Chivo", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(72rem 40rem at 100% -10%, rgba(224, 232, 246, 0.92) 0%, rgba(224, 232, 246, 0) 62%),
+    radial-gradient(64rem 38rem at -10% 100%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 58%),
+    var(--surface);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  margin: 0;
+}
+
+p {
+  margin: 0;
+}
+
+body,
+button,
+input,
+select {
+  letter-spacing: 0.01em;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}

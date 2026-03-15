@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  passwordHash   String?
+  fullName       String?
+  fieldOfStudy   String?
+  careerStage    String?
+  targetTimeline String?
+  avatarUrl      String?
+  authProvider   AuthProvider @default(LOCAL)
+  googleId       String?      @unique
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([fieldOfStudy])
+  @@index([careerStage])
+}
+
+model Pod {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  name        String
+  description String
+  focusArea   String
+  isDefault   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([focusArea])
+}
