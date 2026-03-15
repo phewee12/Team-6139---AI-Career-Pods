@@ -51,6 +51,25 @@ export async function getPods() {
   return request("/pods");
 }
 
+export async function getPodOnboarding(podId) {
+  return request(`/pods/${podId}/onboarding`);
+}
+
+export async function completePodOnboarding(podId, introMessage) {
+  return request(`/pods/${podId}/onboarding`, {
+    method: "POST",
+    body: { introMessage },
+  });
+}
+
+export async function getPodMembers(podId) {
+  return request(`/pods/${podId}/members`);
+}
+
+export async function getUserPods() {
+  return request("/pods/user/mypods");
+}
+
 export async function joinPod(podId) {
   return request(`/pods/${podId}/join`, { method: "POST" });
 }

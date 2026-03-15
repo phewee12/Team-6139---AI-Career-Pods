@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPodPost, getPodPosts, getPods, joinPod } from "../api/client";
+import { createPodPost, getPodPosts, getPods, joinPod, getPodOnboarding } from "../api/client";
+import PodOnboardingModal from "../components/PodOnboardingModel";
+import PodMembersList from "../components/PodMembersList";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -247,6 +249,34 @@ export default function DashboardPage({ user, onLogout }) {
   const [pods, setPods] = useState([]);
   const [podsLoading, setPodsLoading] = useState(true);
   const [podsError, setPodsError] = useState("");
+  const [onboardingStatus, setOnboardingStatus] = useState({});
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [showMembersView, setShowMembersView] = useState(false);
+
+  async function checkOnboardingStatus(groupId) {
+    try {
+      const result = await getPodOnboarding(groupId);
+      console.log("2. Onboarding API result:", result);
+      setOnboardingStatus(prev => ({
+        ...prev,
+        [groupId]: result,
+      }));
+
+      // Show modal if not onboarded
+      if (!result.onboarded && result.canOnboard) {
+        console.log("3. Conditions met, showing modal");
+        setShowOnboardingModal(true);
+      } else {
+        console.log("3. Conditions not met:", { onboarded: result.onboarded, canOnboard: result.canOnboard });
+      }
+    } catch (error) {
+      console.error("Failed to check onboarding:", error);
+    }
+  }
+
+  function toggleMembersView() {
+    setShowMembersView(!showMembersView);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -502,6 +532,7 @@ export default function DashboardPage({ user, onLogout }) {
       );
 
       if (membershipStatus === "ACTIVE") {
+        await checkOnboardingStatus(groupId);
         openFeed(groupId);
       }
     } catch (error) {
@@ -850,10 +881,10 @@ export default function DashboardPage({ user, onLogout }) {
   function renderGroupFeedView() {
     if (!activeGroup) {
       return (
-        <div className="empty-state">
-          <h2>Feed not available</h2>
-          <p>Please return to the group page and open the feed again.</p>
-        </div>
+          <div className="empty-state">
+            <h2>Feed not available</h2>
+            <p>Please return to the group page and open the feed again.</p>
+          </div>
       );
     }
 
@@ -862,21 +893,30 @@ export default function DashboardPage({ user, onLogout }) {
     const postsLoading = postsLoadingByGroup[activeGroup.id] === true;
 
     return (
-      <>
-        <button type="button" className="inline-back" onClick={() => setGroupView("detail")}>
-          <AppIcon name="arrow-left" />
-          Back to Group
-        </button>
-
-        <header className="feed-header">
-          <div>
-            <h1 className="group-title">{activeGroup.name}</h1>
-            <p className="helper-copy">Group Feed</p>
-          </div>
-          <button type="button" className="secondary-action">
-            Group Settings
+        <>
+          <button type="button" className="inline-back" onClick={() => setGroupView("detail")}>
+            <AppIcon name="arrow-left" />
+            Back to Group
           </button>
-        </header>
+
+          <header className="feed-header">
+            <div>
+              <h1 className="group-title">{activeGroup.name}</h1>
+              <p className="helper-copy">Group Feed</p>
+            </div>
+            <div className="feed-actions">
+              <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={toggleMembersView}
+              >
+                View Members
+              </button>
+              <button type="button" className="secondary-action">
+                Group Settings
+              </button>
+            </div>
+          </header>
 
         <section className="feed-layout">
           <div className="feed-main-column">
@@ -998,6 +1038,21 @@ export default function DashboardPage({ user, onLogout }) {
             </article>
           </aside>
         </section>
+        {showMembersView && (
+            <section className="members-view-section">
+              <div className="members-view-header">
+                <h2>Pod Members</h2>
+                <button
+                    type="button"
+                    className="close-button"
+                    onClick={toggleMembersView}
+                >
+                  ×
+                </button>
+              </div>
+              <PodMembersList podId={activeGroup.id} />
+            </section>
+        )}
       </>
     );
   }
@@ -1061,6 +1116,18 @@ export default function DashboardPage({ user, onLogout }) {
           renderPlaceholderSection(activeSection)
         )}
       </div>
+      {showOnboardingModal && activeGroup && (
+          <PodOnboardingModal
+              pod={activeGroup}
+              user={user}
+              onComplete={() => {
+                setShowOnboardingModal(false);
+                // Refresh onboarding status
+                checkOnboardingStatus(activeGroup.id);
+              }}
+              onClose={() => setShowOnboardingModal(false)}
+          />
+      )}
     </main>
   );
 }
