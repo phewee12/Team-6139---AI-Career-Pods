@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPodPost, getPodPosts, getPods, joinPod, getPodOnboarding } from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import PodMembersList from "../components/PodMembersList";
+import ProfilePage from './ProfilePage';
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -9,6 +10,7 @@ const NAV_ITEMS = [
   { id: "career", label: "Career Assist", icon: "briefcase" },
   { id: "jobs", label: "Job Assist", icon: "search" },
   { id: "groups", label: "Groups", icon: "users" },
+  { id: "profile", label: "Profile", icon: "user" },
 ];
 
 const SECTION_COPY = {
@@ -163,6 +165,13 @@ function AppIcon({ name }) {
           <circle cx="18" cy="18" r="2" />
           <path d="m7.7 11 8-4" />
           <path d="m7.7 13 8 4" />
+        </svg>
+      );
+    case "user":
+      return (
+        <svg {...commonProps}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
         </svg>
       );
     default:
@@ -1112,6 +1121,8 @@ export default function DashboardPage({ user, onLogout }) {
 
         {activeSection === "groups" ? (
           <section className="content-shell groups-shell">{renderGroupsContent()}</section>
+        ) : activeSection === "profile" ? (
+          <ProfilePage user={user} />
         ) : (
           renderPlaceholderSection(activeSection)
         )}

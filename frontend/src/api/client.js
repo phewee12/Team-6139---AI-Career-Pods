@@ -85,3 +85,24 @@ export async function createPodPost(podId, input) {
 export function getGoogleAuthUrl() {
   return `${SERVER_URL}/api/auth/google`;
 }
+
+export async function getProfile() {
+  const response = await fetch("/api/profile", {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch profile");
+  }
+
+  return response.json();
+}
+
+export async function getUserProfile(userId) {
+  const response = await fetch(`/api/profile/${userId}`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch member profile");
+  return response.json();
+}
+

@@ -1157,3 +1157,10 @@ button {
 .close-button:hover {
   color: var(--ink);
 }
+
+.profile-shell {
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+
