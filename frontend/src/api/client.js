@@ -51,6 +51,25 @@ export async function getPods() {
   return request("/pods");
 }
 
+export async function getPodOnboarding(podId) {
+  return request(`/pods/${podId}/onboarding`);
+}
+
+export async function completePodOnboarding(podId, introMessage) {
+  return request(`/pods/${podId}/onboarding`, {
+    method: "POST",
+    body: { introMessage },
+  });
+}
+
+export async function getPodMembers(podId) {
+  return request(`/pods/${podId}/members`);
+}
+
+export async function getUserPods() {
+  return request("/pods/user/mypods");
+}
+
 export async function joinPod(podId) {
   return request(`/pods/${podId}/join`, { method: "POST" });
 }
@@ -66,3 +85,24 @@ export async function createPodPost(podId, input) {
 export function getGoogleAuthUrl() {
   return `${SERVER_URL}/api/auth/google`;
 }
+
+export async function getProfile() {
+  const response = await fetch("/api/profile", {
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch profile");
+  }
+
+  return response.json();
+}
+
+export async function getUserProfile(userId) {
+  const response = await fetch(`/api/profile/${userId}`, {
+    credentials: "include",
+  });
+  if (!response.ok) throw new Error("Failed to fetch member profile");
+  return response.json();
+}
+

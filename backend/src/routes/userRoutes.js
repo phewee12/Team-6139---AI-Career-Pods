@@ -30,3 +30,26 @@ router.put("/profile", requireAuth, async (request, response) => {
 });
 
 export { router as userRoutes };
+
+router.get("/profile", requireAuth, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        email: true,
+        fieldOfStudy: true,
+        careerStage: true,
+        targetTimeline: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user });
+  } catch (err) {
+    console.error(err); // log the actual error
+    res.status(500).json({ error: "Failed to get profile" });
+  }
+});

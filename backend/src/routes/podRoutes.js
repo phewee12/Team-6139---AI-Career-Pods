@@ -264,6 +264,185 @@ router.get("/:podId", requireAuth, async (request, response) => {
   }
 });
 
+//USER STORY 3: Pod Onboarding Routes
+
+// Get pod onboarding status
+router.get("/:podId/onboarding", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+
+    const membership = await prisma.podMembership.findUnique({
+      where: {
+        podId_userId: {
+          podId,
+          userId: request.user.id,
+        },
+      },
+      select: {
+        onboardedAt: true,
+        introMessage: true,
+        role: true,
+        status: true,
+      },
+    });
+
+    if (!membership) {
+      return response.status(404).json({ message: "Not a member of this pod." });
+    }
+
+    return response.status(200).json({
+      onboarded: Boolean(membership.onboardedAt),
+      introMessage: membership.introMessage,
+      canOnboard: membership.status === "ACTIVE" && !membership.onboardedAt,
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to get onboarding status." });
+  }
+});
+
+// Complete pod onboarding
+router.post("/:podId/onboarding", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const { introMessage } = request.body;
+
+    if (!introMessage?.trim()) {
+      return response.status(400).json({ message: "Introduction message is required." });
+    }
+
+    const membership = await prisma.podMembership.findUnique({
+      where: {
+        podId_userId: {
+          podId,
+          userId: request.user.id,
+        },
+      },
+    });
+
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "Must be an active member to onboard." });
+    }
+
+    if (membership.onboardedAt) {
+      return response.status(400).json({ message: "Already onboarded." });
+    }
+
+    // Update membership with onboarding data
+    const updated = await prisma.podMembership.update({
+      where: { id: membership.id },
+      data: {
+        onboardedAt: new Date(),
+        introMessage: introMessage.trim(),
+      },
+    });
+
+    return response.status(200).json({
+      message: "Onboarding completed.",
+      onboardedAt: updated.onboardedAt,
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to complete onboarding." });
+  }
+});
+
+//USER STORY 4: Pod Members Routes
+
+// Get all members of a pod
+router.get("/:podId/members", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+
+    // Check if user has access to this pod
+    const membership = await prisma.podMembership.findUnique({
+      where: {
+        podId_userId: {
+          podId,
+          userId: request.user.id,
+        },
+      },
+    });
+
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "Must be an active member to view members." });
+    }
+
+    const members = await prisma.podMembership.findMany({
+      where: {
+        podId,
+        status: "ACTIVE",
+      },
+      include: {
+        user: true,
+      },
+      orderBy: [
+        { role: "desc" }, // ADMINS first
+        { joinedAt: "asc" },
+      ],
+    });
+
+    return response.status(200).json({
+      members: members.map(m => ({
+        id: m.user.id,
+        email: m.user.email,
+        fullName: m.user.fullName,
+        fieldOfStudy: m.user.fieldOfStudy,
+        careerStage: m.user.careerStage,
+        targetTimeline: m.user.targetTimeline,
+        avatarUrl: m.user.avatarUrl,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        onboardedAt: m.onboardedAt,
+        introMessage: m.introMessage,
+      })),
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load members." });
+  }
+});
+
+// Get user's pods (for "My Pods" view)
+router.get("/user/mypods", requireAuth, async (request, response) => {
+  try {
+    const memberships = await prisma.podMembership.findMany({
+      where: {
+        userId: request.user.id,
+        status: "ACTIVE",
+      },
+      include: {
+        pod: {
+          include: {
+            _count: {
+              select: {
+                memberships: {
+                  where: { status: "ACTIVE" },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ joinedAt: "desc" }],
+    });
+
+    return response.status(200).json({
+      pods: memberships.map(m => ({
+        id: m.pod.id,
+        slug: m.pod.slug,
+        name: m.pod.name,
+        description: m.pod.description,
+        focusArea: m.pod.focusArea,
+        visibility: m.pod.visibility,
+        memberCount: m.pod._count.memberships,
+        joinedAt: m.joinedAt,
+        role: m.role,
+        onboarded: Boolean(m.onboardedAt),
+      })),
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load your pods." });
+  }
+});
+
 router.post("/:podId/join", requireAuth, async (request, response) => {
   try {
     const podId = request.params.podId;
