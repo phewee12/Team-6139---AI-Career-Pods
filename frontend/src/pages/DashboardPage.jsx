@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { createPodPost, getPodPosts, getPods, joinPod, getPodOnboarding } from "../api/client";
+import {
+  createPodPost,
+  deletePodPost,
+  getPodOnboarding,
+  getPodPosts,
+  getPods,
+  joinPod,
+  leavePod,
+} from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import PodMembersList from "../components/PodMembersList";
 import WorkspaceSidebar from "../components/WorkspaceSidebar";
@@ -257,6 +265,8 @@ export default function DashboardPage({ user, onLogout }) {
   const [joinActionError, setJoinActionError] = useState("");
   const [postDraft, setPostDraft] = useState("");
   const [postingPodId, setPostingPodId] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
+  const [leavingPodId, setLeavingPodId] = useState(null);
   const [postActionError, setPostActionError] = useState("");
   const [postSuccessMessage, setPostSuccessMessage] = useState("");
   const [highlightedPostId, setHighlightedPostId] = useState(null);
@@ -606,6 +616,75 @@ export default function DashboardPage({ user, onLogout }) {
     }
   }
 
+  async function handleDeletePost(postId) {
+    if (!activeGroup || !postId) {
+      return;
+    }
+
+    setDeletingPostId(postId);
+    setPostActionError("");
+
+    try {
+      await deletePodPost(activeGroup.id, postId);
+      setPostsByGroup((current) => ({
+        ...current,
+        [activeGroup.id]: (current[activeGroup.id] || []).filter((post) => post.id !== postId),
+      }));
+    } catch (error) {
+      setPostActionError(error.message || "Could not delete post.");
+    } finally {
+      setDeletingPostId(null);
+    }
+  }
+
+  async function handleLeaveGroup(groupId) {
+    if (!groupId) {
+      return;
+    }
+
+    setLeavingPodId(groupId);
+    setJoinActionError("");
+
+    try {
+      await leavePod(groupId);
+
+      setJoinStatusByGroup((current) => {
+        const next = { ...current };
+        delete next[groupId];
+        return next;
+      });
+
+      setPods((current) =>
+        current.map((pod) => {
+          if (pod.id !== groupId) {
+            return pod;
+          }
+
+          const wasActive = pod.membershipStatus === "ACTIVE";
+          const nextMemberCount = wasActive
+            ? Math.max(0, (typeof pod.memberCount === "number" ? pod.memberCount : 0) - 1)
+            : pod.memberCount;
+
+          return {
+            ...pod,
+            membershipStatus: null,
+            membershipRole: null,
+            memberCount: nextMemberCount,
+          };
+        }),
+      );
+
+      if (activeGroupId === groupId) {
+        setGroupView("discover");
+        setActiveGroupId(null);
+      }
+    } catch (error) {
+      setJoinActionError(error.message || "Could not leave group.");
+    } finally {
+      setLeavingPodId(null);
+    }
+  }
+
   function renderDiscoverView() {
     return (
       <>
@@ -780,6 +859,8 @@ export default function DashboardPage({ user, onLogout }) {
         : effectiveStatus === "ACTIVE"
           ? "Joined"
           : activeGroup.joinActionLabel;
+    const canLeave = effectiveStatus === "ACTIVE" || effectiveStatus === "PENDING";
+    const leaveLabel = effectiveStatus === "PENDING" ? "Cancel Request" : "Leave Group";
 
     return (
       <>
@@ -831,6 +912,16 @@ export default function DashboardPage({ user, onLogout }) {
               <button type="button" className="secondary-action" onClick={() => openFeed(activeGroup.id)}>
                 View Feed
               </button>
+              {canLeave && (
+                <button
+                  type="button"
+                  className="secondary-action danger-action"
+                  disabled={leavingPodId === activeGroup.id}
+                  onClick={() => handleLeaveGroup(activeGroup.id)}
+                >
+                  {leavingPodId === activeGroup.id ? "Leaving..." : leaveLabel}
+                </button>
+              )}
             </div>
             {joinActionError && <p className="error-banner">{joinActionError}</p>}
           </div>
@@ -905,6 +996,7 @@ export default function DashboardPage({ user, onLogout }) {
     const membershipStatus = getGroupMembershipStatus(activeGroup);
     const canPost = membershipStatus === "ACTIVE";
     const postsLoading = postsLoadingByGroup[activeGroup.id] === true;
+    const canLeaveGroup = membershipStatus === "ACTIVE" || membershipStatus === "PENDING";
 
     return (
         <>
@@ -926,6 +1018,20 @@ export default function DashboardPage({ user, onLogout }) {
               >
                 View Members
               </button>
+              {canLeaveGroup && (
+                <button
+                  type="button"
+                  className="secondary-action danger-action"
+                  disabled={leavingPodId === activeGroup.id}
+                  onClick={() => handleLeaveGroup(activeGroup.id)}
+                >
+                  {leavingPodId === activeGroup.id
+                    ? "Leaving..."
+                    : membershipStatus === "PENDING"
+                      ? "Cancel Request"
+                      : "Leave Group"}
+                </button>
+              )}
               <button type="button" className="secondary-action">
                 Group Settings
               </button>
@@ -1006,16 +1112,28 @@ export default function DashboardPage({ user, onLogout }) {
                 }
               >
                 <header className="post-header">
-                  <AvatarBadge
-                    key={post.author?.id || post.id}
-                    className="feed-author-avatar"
-                    imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
-                    label={post.author?.fullName || post.author?.email || "Member"}
-                  />
-                  <div>
-                    <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
-                    <small>{formatPostTimestamp(post.createdAt)}</small>
+                  <div className="post-header-left">
+                    <AvatarBadge
+                      key={post.author?.id || post.id}
+                      className="feed-author-avatar"
+                      imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
+                      label={post.author?.fullName || post.author?.email || "Member"}
+                    />
+                    <div>
+                      <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
+                      <small>{formatPostTimestamp(post.createdAt)}</small>
+                    </div>
                   </div>
+                  {post.authorId === user.id && (
+                    <button
+                      type="button"
+                      className="post-delete-button"
+                      disabled={deletingPostId === post.id}
+                      onClick={() => handleDeletePost(post.id)}
+                    >
+                      {deletingPostId === post.id ? "Deleting..." : "Delete"}
+                    </button>
+                  )}
                 </header>
                 <p>{post.content}</p>
               </article>

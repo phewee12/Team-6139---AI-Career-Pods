@@ -12,6 +12,7 @@ export default function ProfileSetupPage({ user, onSaved }) {
   const [avatarUploadData, setAvatarUploadData] = useState("");
   const [avatarUploadContentType, setAvatarUploadContentType] = useState("");
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(user.avatarImageUrl || user.avatarUrl || "");
+  const profileInitial = (user.fullName || user.email || "Q").charAt(0).toUpperCase();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -66,14 +67,22 @@ export default function ProfileSetupPage({ user, onSaved }) {
     setError("");
 
     try {
-      const result = await setupProfile({
+      const payload = {
         fieldOfStudy,
         careerStage,
         targetTimeline,
-        avatarUrl,
-        avatarUploadData,
-        avatarUploadContentType,
-      });
+      };
+
+      if (avatarUrl.trim()) {
+        payload.avatarUrl = avatarUrl.trim();
+      }
+
+      if (avatarUploadData.trim() && avatarUploadContentType.trim()) {
+        payload.avatarUploadData = avatarUploadData;
+        payload.avatarUploadContentType = avatarUploadContentType;
+      }
+
+      const result = await setupProfile(payload);
       onSaved(result.user);
     } catch (requestError) {
       setError(requestError.message || "Could not save profile details.");
@@ -155,12 +164,16 @@ export default function ProfileSetupPage({ user, onSaved }) {
             />
           </label>
 
-          {avatarPreviewUrl && (
-            <div className="profile-avatar-preview">
+          <div className="profile-avatar-preview">
+            {avatarPreviewUrl ? (
               <img src={avatarPreviewUrl} alt="Profile preview" />
-              <p className="helper-copy">Avatar preview</p>
-            </div>
-          )}
+            ) : (
+              <div className="profile-avatar-fallback" aria-hidden="true">
+                {profileInitial}
+              </div>
+            )}
+            <p className="helper-copy">Avatar preview</p>
+          </div>
 
           {error && <p className="error-banner">{error}</p>}
 

@@ -557,6 +557,42 @@ router.post("/:podId/join", requireAuth, async (request, response) => {
   }
 });
 
+router.post("/:podId/leave", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+
+    const pod = await prisma.pod.findUnique({
+      where: { id: podId },
+      select: { id: true },
+    });
+
+    if (!pod) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    const membership = await prisma.podMembership.findUnique({
+      where: {
+        podId_userId: {
+          podId,
+          userId: request.user.id,
+        },
+      },
+    });
+
+    if (!membership || (membership.status !== "ACTIVE" && membership.status !== "PENDING")) {
+      return response.status(400).json({ message: "You are not currently in this group." });
+    }
+
+    await prisma.podMembership.delete({ where: { id: membership.id } });
+
+    return response.status(200).json({
+      message: membership.status === "PENDING" ? "Join request cancelled." : "Left group.",
+    });
+  } catch {
+    return response.status(500).json({ message: "Failed to leave pod." });
+  }
+});
+
 router.get("/:podId/posts", requireAuth, async (request, response) => {
   try {
     const { podId } = request.params;
@@ -622,6 +658,49 @@ router.post("/:podId/posts", requireAuth, async (request, response) => {
     }
 
     return response.status(500).json({ message: "Failed to create post." });
+  }
+});
+
+router.delete("/:podId/posts/:postId", requireAuth, async (request, response) => {
+  try {
+    const { podId, postId } = request.params;
+
+    const pod = await prisma.pod.findUnique({
+      where: { id: podId },
+      select: { id: true },
+    });
+
+    if (!pod) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    const membership = await getActiveMembership(podId, request.user.id);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "You must be an active member to manage posts." });
+    }
+
+    const post = await prisma.podPost.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        podId: true,
+        authorId: true,
+      },
+    });
+
+    if (!post || post.podId !== podId) {
+      return response.status(404).json({ message: "Post not found." });
+    }
+
+    if (post.authorId !== request.user.id) {
+      return response.status(403).json({ message: "You can only delete your own posts." });
+    }
+
+    await prisma.podPost.delete({ where: { id: post.id } });
+
+    return response.status(200).json({ message: "Post deleted." });
+  } catch {
+    return response.status(500).json({ message: "Failed to delete post." });
   }
 });
 

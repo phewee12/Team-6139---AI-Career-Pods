@@ -479,6 +479,79 @@ describe("Pod Endpoints", () => {
     );
   });
 
+  it("allows members to leave a joined group", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Leaving Member",
+      email: "leaving-member@example.com",
+      password: "Password123",
+    });
+
+    const cookie = registration.headers["set-cookie"];
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+
+    const leaveResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/leave`)
+      .set("Cookie", cookie);
+
+    expect(leaveResponse.status).toBe(200);
+
+    const refreshedPodsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const refreshedPod = refreshedPodsResponse.body.pods.find((pod) => pod.id === publicPod.id);
+    expect(refreshedPod.membershipStatus).toBeNull();
+  });
+
+  it("allows deleting own posts and blocks deleting others' posts", async () => {
+    const authorRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Post Author",
+      email: "post-author@example.com",
+      password: "Password123",
+    });
+    const authorCookie = authorRegistration.headers["set-cookie"];
+
+    const otherRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Other Member",
+      email: "other-member@example.com",
+      password: "Password123",
+    });
+    const otherCookie = otherRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", authorCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", authorCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", otherCookie);
+
+    const createPostResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/posts`)
+      .set("Cookie", authorCookie)
+      .send({ content: "This is my post to delete." });
+
+    expect(createPostResponse.status).toBe(201);
+    const createdPost = createPostResponse.body.post;
+
+    const forbiddenDeleteResponse = await request(app)
+      .delete(`/api/pods/${publicPod.id}/posts/${createdPost.id}`)
+      .set("Cookie", otherCookie);
+
+    expect(forbiddenDeleteResponse.status).toBe(403);
+
+    const deleteResponse = await request(app)
+      .delete(`/api/pods/${publicPod.id}/posts/${createdPost.id}`)
+      .set("Cookie", authorCookie);
+
+    expect(deleteResponse.status).toBe(200);
+
+    const postsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/posts`)
+      .set("Cookie", authorCookie);
+
+    expect(postsResponse.status).toBe(200);
+    expect(postsResponse.body.posts.some((post) => post.id === createdPost.id)).toBe(false);
+  });
+
   it("blocks non-members from creating pod posts", async () => {
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Non Member",

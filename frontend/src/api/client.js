@@ -74,12 +74,20 @@ export async function joinPod(podId) {
   return request(`/pods/${podId}/join`, { method: "POST" });
 }
 
+export async function leavePod(podId) {
+  return request(`/pods/${podId}/leave`, { method: "POST" });
+}
+
 export async function getPodPosts(podId) {
   return request(`/pods/${podId}/posts`);
 }
 
 export async function createPodPost(podId, input) {
   return request(`/pods/${podId}/posts`, { method: "POST", body: input });
+}
+
+export async function deletePodPost(podId, postId) {
+  return request(`/pods/${podId}/posts/${postId}`, { method: "DELETE" });
 }
 
 export function getGoogleAuthUrl() {

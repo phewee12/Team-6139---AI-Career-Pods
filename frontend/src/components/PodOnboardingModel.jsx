@@ -11,7 +11,7 @@ const POD_RULES = [
 
 export default function PodOnboardingModal({ pod, user, onComplete, onClose }) {
     const [introMessage, setIntroMessage] = useState(
-        `Hi everyone! I'm ${user.fullName || user.email}, ${user.fieldOfStudy || "studying"}`
+        `Hi everyone! I'm ${user.fullName || user.email}, studying ${user.fieldOfStudy} and currently at the ${user.careerStage} stage. I'm looking forward to connecting with you all!`
     );
     const [acknowledged, setAcknowledged] = useState(false);
     const [pending, setPending] = useState(false);

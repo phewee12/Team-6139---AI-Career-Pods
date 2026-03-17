@@ -242,6 +242,19 @@ button {
   background: var(--lavender-mist);
 }
 
+.profile-avatar-fallback {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--lavender-soft);
+  color: var(--primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
 .workspace-shell {
   min-height: 100vh;
   display: grid;
@@ -882,8 +895,45 @@ button {
   background: transparent;
   padding: 0;
   display: flex;
+  justify-content: space-between;
   gap: 0.65rem;
   align-items: center;
+}
+
+.post-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.post-delete-button {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, white);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--danger);
+  padding: 0.25rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.post-delete-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.post-delete-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, white);
+}
+
+.danger-action {
+  border-color: color-mix(in srgb, var(--danger) 35%, white);
+  color: var(--danger);
+  background: #fff;
+}
+
+.danger-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 10%, white);
 }
 
 .post-author {
