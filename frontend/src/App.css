@@ -227,6 +227,21 @@ button {
   font-size: 0.92rem;
 }
 
+.profile-avatar-preview {
+  display: grid;
+  justify-items: start;
+  gap: 0.45rem;
+}
+
+.profile-avatar-preview img {
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  object-fit: cover;
+  background: var(--lavender-mist);
+}
+
 .workspace-shell {
   min-height: 100vh;
   display: grid;
@@ -307,6 +322,10 @@ button {
   background: transparent;
 }
 
+.workspace-sidebar-footer {
+  margin-top: auto;
+}
+
 .workspace-main {
   min-width: 0;
   display: grid;
@@ -359,6 +378,15 @@ button {
   width: 2.4rem;
   height: 2.4rem;
   border-radius: 999px;
+  overflow: hidden;
+}
+
+.user-avatar img,
+.feed-author-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .content-shell {
@@ -716,6 +744,20 @@ button {
   background: var(--lavender-soft);
   border-radius: 0.3rem;
   display: inline-block;
+}
+
+.feed-author-avatar {
+  width: 1.85rem;
+  height: 1.85rem;
+  border: 1px solid var(--line-strong);
+  background: var(--lavender-soft);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .related-item {
@@ -1079,6 +1121,25 @@ button {
   background: white;
 }
 
+.member-card-button {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.member-card-button:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  box-shadow: 0 8px 14px rgba(86, 5, 145, 0.12);
+}
+
+.member-card-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .member-avatar {
   width: 2.5rem;
   height: 2.5rem;
@@ -1091,6 +1152,13 @@ button {
   color: var(--primary);
   position: relative;
   flex-shrink: 0;
+}
+
+.member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .admin-badge {
@@ -1127,6 +1195,54 @@ button {
   word-break: break-word;
 }
 
+.member-click-hint {
+  margin: 0;
+}
+
+.member-profile-modal {
+  max-width: 38rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.member-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.member-name-large {
+  font-size: 1.1rem;
+  margin-bottom: 0.15rem;
+}
+
+.member-profile-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.member-profile-grid div {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  background: #fff;
+}
+
+.member-profile-grid dt {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.member-profile-grid dd {
+  margin: 0.3rem 0 0;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
 .feed-actions {
   display: flex;
   gap: 0.5rem;
@@ -1156,4 +1272,10 @@ button {
 
 .close-button:hover {
   color: var(--ink);
+}
+
+@media (max-width: 700px) {
+  .member-profile-grid {
+    grid-template-columns: 1fr;
+  }
 }

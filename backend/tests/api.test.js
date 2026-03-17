@@ -183,12 +183,14 @@ describe("User Endpoints", () => {
         fieldOfStudy: "Computer Science",
         careerStage: "Junior",
         targetTimeline: "6 months",
+        avatarUrl: "https://images.example.com/profile-student.png",
       });
 
     expect(response.status).toBe(200);
     expect(response.body.user.fieldOfStudy).toBe("Computer Science");
     expect(response.body.user.careerStage).toBe("Junior");
     expect(response.body.user.targetTimeline).toBe("6 months");
+    expect(response.body.user.avatarUrl).toBe("https://images.example.com/profile-student.png");
   });
 
   it("validates profile input", async () => {
@@ -208,6 +210,40 @@ describe("User Endpoints", () => {
       });
 
     expect(response.status).toBe(400);
+  });
+
+  it("stores uploaded avatar image data and serves it via avatar endpoint", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Avatar User",
+      email: "avatar-user@example.com",
+      password: "Password123",
+    });
+
+    const cookie = registration.headers["set-cookie"];
+    const tinyGifDataUrl = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+
+    const profileResponse = await request(app)
+      .put("/api/users/profile")
+      .set("Cookie", cookie)
+      .send({
+        fieldOfStudy: "Information Systems",
+        careerStage: "Junior",
+        targetTimeline: "6 months",
+        avatarUploadData: tinyGifDataUrl,
+        avatarUploadContentType: "image/gif",
+      });
+
+    expect(profileResponse.status).toBe(200);
+    expect(profileResponse.body.user.hasAvatarUpload).toBe(true);
+    expect(profileResponse.body.user.avatarImageUrl).toContain("/api/users/");
+
+    const avatarResponse = await request(app)
+      .get(`/api/users/${profileResponse.body.user.id}/avatar`)
+      .set("Cookie", cookie);
+
+    expect(avatarResponse.status).toBe(200);
+    expect(avatarResponse.headers["content-type"]).toContain("image/gif");
+    expect(avatarResponse.body.length).toBeGreaterThan(0);
   });
 });
 
@@ -476,5 +512,82 @@ describe("Pod Endpoints", () => {
       .send({ content: "Trying to post without joining should fail." });
 
     expect(createPostResponse.status).toBe(403);
+  });
+
+  it("returns active pod members with profile details", async () => {
+    const firstUser = await request(app).post("/api/auth/register").send({
+      fullName: "Member One",
+      email: "member-one@example.com",
+      password: "Password123",
+    });
+    const firstCookie = firstUser.headers["set-cookie"];
+
+    await request(app)
+      .put("/api/users/profile")
+      .set("Cookie", firstCookie)
+      .send({
+        fieldOfStudy: "Computer Science",
+        careerStage: "Senior",
+        targetTimeline: "3 months",
+        avatarUrl: "https://images.example.com/member-one.png",
+      });
+
+    const secondUser = await request(app).post("/api/auth/register").send({
+      fullName: "Member Two",
+      email: "member-two@example.com",
+      password: "Password123",
+    });
+    const secondCookie = secondUser.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", firstCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", firstCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", secondCookie);
+
+    const membersResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/members`)
+      .set("Cookie", firstCookie);
+
+    expect(membersResponse.status).toBe(200);
+    expect(membersResponse.body.members.length).toBeGreaterThanOrEqual(2);
+
+    const firstMember = membersResponse.body.members.find((member) => member.email === "member-one@example.com");
+    expect(firstMember).toBeTruthy();
+    expect(firstMember.fieldOfStudy).toBe("Computer Science");
+    expect(firstMember.careerStage).toBe("Senior");
+    expect(firstMember.targetTimeline).toBe("3 months");
+    expect(firstMember.avatarUrl).toBe("https://images.example.com/member-one.png");
+  });
+
+  it("creates an onboarding feed post when onboarding is completed", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Onboarding Member",
+      email: "onboarding-member@example.com",
+      password: "Password123",
+    });
+
+    const cookie = registration.headers["set-cookie"];
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+
+    const introMessage = "Hi team, excited to learn and contribute each week.";
+    const onboardingResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/onboarding`)
+      .set("Cookie", cookie)
+      .send({ introMessage });
+
+    expect(onboardingResponse.status).toBe(200);
+
+    const postsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/posts`)
+      .set("Cookie", cookie);
+
+    expect(postsResponse.status).toBe(200);
+    expect(postsResponse.body.posts.length).toBeGreaterThan(0);
+    expect(postsResponse.body.posts[0].content).toContain("Onboarding Member joined the pod. Intro:");
+    expect(postsResponse.body.posts[0].content).toContain(introMessage);
   });
 });

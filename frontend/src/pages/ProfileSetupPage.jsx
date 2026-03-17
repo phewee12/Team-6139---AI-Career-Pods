@@ -8,8 +8,57 @@ export default function ProfileSetupPage({ user, onSaved }) {
   const [fieldOfStudy, setFieldOfStudy] = useState(user.fieldOfStudy || "");
   const [careerStage, setCareerStage] = useState(user.careerStage || "");
   const [targetTimeline, setTargetTimeline] = useState(user.targetTimeline || "");
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || "");
+  const [avatarUploadData, setAvatarUploadData] = useState("");
+  const [avatarUploadContentType, setAvatarUploadContentType] = useState("");
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState(user.avatarImageUrl || user.avatarUrl || "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+
+  async function handleAvatarFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const supportedTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+    if (!supportedTypes.includes(file.type)) {
+      setError("Unsupported image type. Use PNG, JPEG, WEBP, or GIF.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Avatar file must be 2MB or smaller.");
+      return;
+    }
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read selected avatar file."));
+      reader.readAsDataURL(file);
+    });
+
+    setError("");
+    setAvatarUrl("");
+    setAvatarUploadData(dataUrl);
+    setAvatarUploadContentType(file.type);
+    setAvatarPreviewUrl(dataUrl);
+  }
+
+  function handleAvatarUrlChange(event) {
+    const value = event.target.value;
+    setAvatarUrl(value);
+
+    if (value.trim()) {
+      setAvatarUploadData("");
+      setAvatarUploadContentType("");
+      setAvatarPreviewUrl(value.trim());
+    } else if (!avatarUploadData) {
+      setAvatarPreviewUrl("");
+    }
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -17,7 +66,14 @@ export default function ProfileSetupPage({ user, onSaved }) {
     setError("");
 
     try {
-      const result = await setupProfile({ fieldOfStudy, careerStage, targetTimeline });
+      const result = await setupProfile({
+        fieldOfStudy,
+        careerStage,
+        targetTimeline,
+        avatarUrl,
+        avatarUploadData,
+        avatarUploadContentType,
+      });
       onSaved(result.user);
     } catch (requestError) {
       setError(requestError.message || "Could not save profile details.");
@@ -78,6 +134,33 @@ export default function ProfileSetupPage({ user, onSaved }) {
               ))}
             </select>
           </label>
+
+          <label>
+            Upload profile picture (recommended)
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              onChange={handleAvatarFileChange}
+            />
+          </label>
+
+          <label>
+            Profile picture URL (optional fallback)
+            <input
+              type="url"
+              value={avatarUrl}
+              onChange={handleAvatarUrlChange}
+              placeholder="https://example.com/avatar.jpg"
+              maxLength={500}
+            />
+          </label>
+
+          {avatarPreviewUrl && (
+            <div className="profile-avatar-preview">
+              <img src={avatarPreviewUrl} alt="Profile preview" />
+              <p className="helper-copy">Avatar preview</p>
+            </div>
+          )}
 
           {error && <p className="error-banner">{error}</p>}
 

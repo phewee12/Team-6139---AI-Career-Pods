@@ -37,6 +37,8 @@ model User {
   careerStage         String?
   targetTimeline      String?
   avatarUrl           String?
+  avatarData          Bytes?
+  avatarMimeType      String?
   authProvider        AuthProvider    @default(LOCAL)
   googleId            String?         @unique
   createdAt           DateTime        @default(now())

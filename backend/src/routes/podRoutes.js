@@ -327,13 +327,29 @@ router.post("/:podId/onboarding", requireAuth, async (request, response) => {
       return response.status(400).json({ message: "Already onboarded." });
     }
 
-    // Update membership with onboarding data
-    const updated = await prisma.podMembership.update({
-      where: { id: membership.id },
-      data: {
-        onboardedAt: new Date(),
-        introMessage: introMessage.trim(),
-      },
+    const trimmedIntroMessage = introMessage.trim();
+    const userLabel = request.user.fullName?.trim() || request.user.email;
+    const onboardingFeedMessage = `${userLabel} joined the pod. Intro: ${trimmedIntroMessage}`;
+
+    // Persist onboarding completion and publish an intro message to the pod feed.
+    const updated = await prisma.$transaction(async (transaction) => {
+      const updatedMembership = await transaction.podMembership.update({
+        where: { id: membership.id },
+        data: {
+          onboardedAt: new Date(),
+          introMessage: trimmedIntroMessage,
+        },
+      });
+
+      await transaction.podPost.create({
+        data: {
+          podId,
+          authorId: request.user.id,
+          content: onboardingFeedMessage,
+        },
+      });
+
+      return updatedMembership;
     });
 
     return response.status(200).json({
@@ -382,13 +398,7 @@ router.get("/:podId/members", requireAuth, async (request, response) => {
 
     return response.status(200).json({
       members: members.map(m => ({
-        id: m.user.id,
-        email: m.user.email,
-        fullName: m.user.fullName,
-        fieldOfStudy: m.user.fieldOfStudy,
-        careerStage: m.user.careerStage,
-        targetTimeline: m.user.targetTimeline,
-        avatarUrl: m.user.avatarUrl,
+        ...toPublicUser(m.user),
         role: m.role,
         joinedAt: m.joinedAt,
         onboardedAt: m.onboardedAt,

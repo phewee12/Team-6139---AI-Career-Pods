@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPodPost, getPodPosts, getPods, joinPod, getPodOnboarding } from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import PodMembersList from "../components/PodMembersList";
+import WorkspaceSidebar from "../components/WorkspaceSidebar";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -224,6 +225,23 @@ function formatPostTimestamp(value) {
   });
 }
 
+function AvatarBadge({ imageUrl, label, className }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  const fallback = (label || "?").charAt(0).toUpperCase();
+  const showImage = Boolean(imageUrl) && !imageFailed;
+
+  return (
+    <div className={className} title={label || "Member"}>
+      {showImage ? (
+        <img src={imageUrl} alt={`${label || "Member"} avatar`} onError={() => setImageFailed(true)} />
+      ) : (
+        fallback
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPage({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState("groups");
   const [activeTab, setActiveTab] = useState("discover");
@@ -249,7 +267,6 @@ export default function DashboardPage({ user, onLogout }) {
   const [pods, setPods] = useState([]);
   const [podsLoading, setPodsLoading] = useState(true);
   const [podsError, setPodsError] = useState("");
-  const [onboardingStatus, setOnboardingStatus] = useState({});
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [showMembersView, setShowMembersView] = useState(false);
 
@@ -257,10 +274,6 @@ export default function DashboardPage({ user, onLogout }) {
     try {
       const result = await getPodOnboarding(groupId);
       console.log("2. Onboarding API result:", result);
-      setOnboardingStatus(prev => ({
-        ...prev,
-        [groupId]: result,
-      }));
 
       // Show modal if not onboarded
       if (!result.onboarded && result.canOnboard) {
@@ -434,6 +447,7 @@ export default function DashboardPage({ user, onLogout }) {
   }, [highlightedPostId]);
 
   const userInitial = (user.fullName || user.email || "Q").charAt(0).toUpperCase();
+  const userAvatarUrl = user.avatarImageUrl || user.avatarUrl || "";
 
   function renderPlaceholderSection(sectionId) {
     const section = SECTION_COPY[sectionId];
@@ -992,7 +1006,12 @@ export default function DashboardPage({ user, onLogout }) {
                 }
               >
                 <header className="post-header">
-                  <span className="admin-avatar" />
+                  <AvatarBadge
+                    key={post.author?.id || post.id}
+                    className="feed-author-avatar"
+                    imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
+                    label={post.author?.fullName || post.author?.email || "Member"}
+                  />
                   <div>
                     <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
                     <small>{formatPostTimestamp(post.createdAt)}</small>
@@ -1063,46 +1082,33 @@ export default function DashboardPage({ user, onLogout }) {
     return renderDiscoverView();
   }
 
+  function handleSidebarSectionSelect(sectionId) {
+    setActiveSection(sectionId);
+    if (sectionId === "groups") {
+      setGroupView("discover");
+    }
+  }
+
   return (
     <main className="workspace-shell">
-      <aside className="workspace-sidebar">
-        <div className="brand-block">
-          <div className="brand-mark">Q</div>
-          <div>
-            <p className="brand-name">Qwyse</p>
-            <p className="brand-subtitle">Career intelligence</p>
-          </div>
-        </div>
-
-        <nav className="sidebar-nav" aria-label="Workspace sections">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={item.id === activeSection ? "sidebar-link active" : "sidebar-link"}
-              onClick={() => {
-                setActiveSection(item.id);
-                if (item.id === "groups") {
-                  setGroupView("discover");
-                }
-              }}
-            >
-              <AppIcon name={item.icon} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <button type="button" className="sidebar-logout" onClick={onLogout}>
-          Sign out
-        </button>
-      </aside>
+      <WorkspaceSidebar
+        navItems={NAV_ITEMS}
+        activeSection={activeSection}
+        onSelectSection={handleSidebarSectionSelect}
+        onLogout={onLogout}
+        renderIcon={(name) => <AppIcon name={name} />}
+      />
 
       <div className="workspace-main">
         <header className="workspace-topbar">
           <div className="status-chip">Workspace</div>
           <div className="user-chip">
-            <div className="user-avatar">{userInitial}</div>
+            <AvatarBadge
+              key={userAvatarUrl || user.id}
+              className="user-avatar"
+              imageUrl={userAvatarUrl}
+              label={user.fullName || user.email || userInitial}
+            />
             <div>
               <p className="user-name">{user.fullName || user.email}</p>
               <p className="user-meta">{user.careerStage || "Member"}</p>
@@ -1124,6 +1130,7 @@ export default function DashboardPage({ user, onLogout }) {
                 setShowOnboardingModal(false);
                 // Refresh onboarding status
                 checkOnboardingStatus(activeGroup.id);
+                loadGroupPosts(activeGroup.id);
               }}
               onClose={() => setShowOnboardingModal(false)}
           />
