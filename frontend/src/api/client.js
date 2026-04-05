@@ -93,3 +93,56 @@ export async function deletePodPost(podId, postId) {
 export function getGoogleAuthUrl() {
   return `${SERVER_URL}/api/auth/google`;
 }
+
+export async function getCurrentRituals(podId) {
+  return request(`/pods/${podId}/checkin/current`);
+}
+
+export async function submitCheckIn(podId, notes, goals) {
+  return request(`/pods/${podId}/checkin`, {
+    method: "POST",
+    body: { notes, goals },
+  });
+}
+
+export async function submitReflection(podId, content) {
+  return request(`/pods/${podId}/reflection`, {
+    method: "POST",
+    body: { content },
+  });
+}
+
+export async function addCelebration(podId, title, description) {
+  return request(`/pods/${podId}/celebrations`, {
+    method: "POST",
+    body: { title, description },
+  });
+}
+
+export async function getPodCheckIns(podId) {
+  return request(`/pods/${podId}/checkins`);
+}
+
+export async function getPodReflections(podId) {
+  return request(`/pods/${podId}/reflections`);
+}
+
+export async function getPodPhase(podId) {
+  return request(`/pods/${podId}/phase`);
+}
+
+export async function getPodStats(podId) {
+  return request(`/pods/${podId}/stats`);
+}
+
+export async function getPodCelebrations(podId) {
+  return request(`/pods/${podId}/celebrations/all`);
+}
+
+export async function getNotifications() {
+  return request(`/pods/notifications`);
+}
+
+export async function markNotificationRead(notificationId) {
+  return request(`/pods/notifications/${notificationId}/read`, { method: "PATCH" });
+}

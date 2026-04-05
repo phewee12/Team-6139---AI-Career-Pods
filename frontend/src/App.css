@@ -1329,3 +1329,341 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+.rituals-container {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.rituals-header {
+  text-align: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.rituals-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.5rem;
+}
+
+.rituals-form {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.rituals-form textarea,
+.rituals-form input {
+  width: 100%;
+}
+
+.celebrations-list {
+  margin-top: 1.5rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.celebration-card {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--lavender-mist);
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+}
+
+.celebration-emoji {
+  font-size: 2rem;
+}
+
+.celebration-title {
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.celebration-desc {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pod-checkins {
+  display: grid;
+  gap: 1rem;
+}
+
+.member-checkin-card {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: white;
+}
+
+.member-checkin-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.status-badge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
+
+.status-badge.completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-badge.pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.late {
+  background: #f8d7da;
+  color: #721c24;
+}
+.reflections-list {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.reflection-card {
+  padding: 1rem;
+  background: var(--lavender-mist);
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  margin-top: 0.5rem;
+}
+
+.reflection-card p {
+  font-style: italic;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.reflection-card small {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.progress-dashboard {
+  padding: 1rem;
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+  margin-bottom: 1rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.stat-card {
+  text-align: center;
+  padding: 1rem;
+  background: var(--lavender-mist);
+  border-radius: 1rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+.historical-stats {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.historical-grid {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+}
+
+.historical-card {
+  min-width: 120px;
+  padding: 0.75rem;
+  background: var(--lavender-mist);
+  border-radius: 0.75rem;
+  text-align: center;
+}
+
+.week-date {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.week-stats {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  font-size: 0.8rem;
+}
+
+.celebration-feed {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: linear-gradient(135deg, #fff9e6, #fff);
+  border-radius: 1rem;
+  border: 1px solid #ffd700;
+}
+
+.celebration-feed-header h3 {
+  margin: 0 0 1rem 0;
+  color: #d4a000;
+}
+
+.celebration-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.celebration-feed-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.celebration-icon {
+  font-size: 1.5rem;
+}
+
+.celebration-content {
+  flex: 1;
+}
+
+.celebration-title {
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.celebration-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+
+.prompt-card {
+  background: var(--lavender-mist);
+  padding: 1rem;
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  border-left: 4px solid var(--primary);
+}
+
+.prompt-card p {
+  margin: 0.5rem 0;
+  color: var(--muted);
+}
+
+.prompt-placeholder {
+  font-style: italic;
+  margin-top: 0.75rem !important;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.already-responded {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #d4edda;
+  color: #155724;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.notification-bell {
+  position: relative;
+}
+
+.bell-button {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  position: relative;
+  padding: 0.5rem;
+}
+
+.badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: red;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+
+.notification-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+}
+
+.notification-item {
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.notification-item.unread {
+  background: var(--lavender-mist);
+}
+
+.notification-item strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.notification-item p {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.notification-item small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.no-notifications {
+  padding: 1rem;
+  text-align: center;
+  color: var(--muted);
+}

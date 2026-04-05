@@ -11,6 +11,10 @@ import {
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import PodMembersList from "../components/PodMembersList";
 import WorkspaceSidebar from "../components/WorkspaceSidebar";
+import BiWeeklyRituals from "../components/BiWeeklyRituals";
+import ProgressDashboard from "../components/ProgressDashboard";
+import CelebrationFeed from "../components/CelebrationFeed";
+import NotificationBell from "../components/NotificationBell";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -285,12 +289,11 @@ export default function DashboardPage({ user, onLogout }) {
       const result = await getPodOnboarding(groupId);
       console.log("2. Onboarding API result:", result);
 
-      // Show modal if not onboarded
       if (!result.onboarded && result.canOnboard) {
         console.log("3. Conditions met, showing modal");
         setShowOnboardingModal(true);
       } else {
-        console.log("3. Conditions not met:", { onboarded: result.onboarded, canOnboard: result.canOnboard });
+        console.log("3. Conditions not met:", {onboarded: result.onboarded, canOnboard: result.canOnboard});
       }
     } catch (error) {
       console.error("Failed to check onboarding:", error);
@@ -336,7 +339,7 @@ export default function DashboardPage({ user, onLogout }) {
 
   useEffect(() => {
     setJoinStatusByGroup((current) => {
-      const next = { ...current };
+      const next = {...current};
 
       discoverGroups.forEach((group) => {
         if (!next[group.id] && group.membershipStatus) {
@@ -349,18 +352,18 @@ export default function DashboardPage({ user, onLogout }) {
   }, [discoverGroups]);
 
   const categoryOptions = useMemo(
-    () => ["All", ...new Set(discoverGroups.map((group) => group.category))],
-    [discoverGroups],
+      () => ["All", ...new Set(discoverGroups.map((group) => group.category))],
+      [discoverGroups],
   );
 
   const sizeOptions = useMemo(
-    () => ["All", ...new Set(discoverGroups.map((group) => group.size))],
-    [discoverGroups],
+      () => ["All", ...new Set(discoverGroups.map((group) => group.size))],
+      [discoverGroups],
   );
 
   const activityOptions = useMemo(
-    () => ["All", ...new Set(discoverGroups.map((group) => group.activity))],
-    [discoverGroups],
+      () => ["All", ...new Set(discoverGroups.map((group) => group.activity))],
+      [discoverGroups],
   );
 
   const filteredGroups = useMemo(() => {
@@ -368,11 +371,11 @@ export default function DashboardPage({ user, onLogout }) {
 
     return discoverGroups.filter((group) => {
       const matchesSearch =
-        normalizedSearch.length === 0 ||
-        [group.name, group.description, group.category, ...group.tags]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedSearch);
+          normalizedSearch.length === 0 ||
+          [group.name, group.description, group.category, ...group.tags]
+              .join(" ")
+              .toLowerCase()
+              .includes(normalizedSearch);
 
       const matchesCategory = categoryFilter === "All" || group.category === categoryFilter;
       const matchesSize = sizeFilter === "All" || group.size === sizeFilter;
@@ -383,17 +386,17 @@ export default function DashboardPage({ user, onLogout }) {
   }, [activityFilter, categoryFilter, discoverGroups, searchTerm, sizeFilter]);
 
   const myGroups = useMemo(
-    () =>
-      discoverGroups.filter((group) => {
-        const status = joinStatusByGroup[group.id] || group.membershipStatus;
-        return status === "ACTIVE" || status === "PENDING";
-      }),
-    [discoverGroups, joinStatusByGroup],
+      () =>
+          discoverGroups.filter((group) => {
+            const status = joinStatusByGroup[group.id] || group.membershipStatus;
+            return status === "ACTIVE" || status === "PENDING";
+          }),
+      [discoverGroups, joinStatusByGroup],
   );
 
   const activeGroup = useMemo(
-    () => discoverGroups.find((group) => group.id === activeGroupId) || null,
-    [activeGroupId, discoverGroups],
+      () => discoverGroups.find((group) => group.id === activeGroupId) || null,
+      [activeGroupId, discoverGroups],
   );
 
   const relatedGroups = useMemo(() => {
@@ -439,7 +442,7 @@ export default function DashboardPage({ user, onLogout }) {
       return;
     }
 
-    postElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    postElement.scrollIntoView({behavior: "smooth", block: "center"});
     setHighlightedPostId(scrollToPostId);
     setScrollToPostId(null);
   }, [activeGroup, activeGroupPosts, scrollToPostGroupId, scrollToPostId]);
@@ -463,26 +466,26 @@ export default function DashboardPage({ user, onLogout }) {
     const section = SECTION_COPY[sectionId];
 
     return (
-      <section className="content-shell placeholder-shell">
-        <header className="content-header">
-          <p className="eyebrow">{section.eyebrow}</p>
-          <h1>{section.title}</h1>
-          <p>{section.description}</p>
-        </header>
+        <section className="content-shell placeholder-shell">
+          <header className="content-header">
+            <p className="eyebrow">{section.eyebrow}</p>
+            <h1>{section.title}</h1>
+            <p>{section.description}</p>
+          </header>
 
-        <div className="placeholder-grid">
-          <article className="placeholder-card">
-            <h2>Coming next</h2>
-            <p>This panel is intentionally lightweight while we focus on the groups workflow first.</p>
-          </article>
-          <article className="placeholder-card muted">
-            <h2>Profile signal</h2>
-            <p>
-              {user.fieldOfStudy || "Field not set"} · {user.careerStage || "Stage not set"} · {user.targetTimeline || "Timeline not set"}
-            </p>
-          </article>
-        </div>
-      </section>
+          <div className="placeholder-grid">
+            <article className="placeholder-card">
+              <h2>Coming next</h2>
+              <p>This panel is intentionally lightweight while we focus on the groups workflow first.</p>
+            </article>
+            <article className="placeholder-card muted">
+              <h2>Profile signal</h2>
+              <p>
+                {user.fieldOfStudy || "Field not set"} · {user.careerStage || "Stage not set"} · {user.targetTimeline || "Timeline not set"}
+              </p>
+            </article>
+          </div>
+        </section>
     );
   }
 
@@ -540,19 +543,19 @@ export default function DashboardPage({ user, onLogout }) {
       }
 
       setPods((current) =>
-        current.map((pod) => {
-          if (pod.id !== groupId) {
-            return pod;
-          }
+          current.map((pod) => {
+            if (pod.id !== groupId) {
+              return pod;
+            }
 
-          const becameActive = membershipStatus === "ACTIVE" && pod.membershipStatus !== "ACTIVE";
+            const becameActive = membershipStatus === "ACTIVE" && pod.membershipStatus !== "ACTIVE";
 
-          return {
-            ...pod,
-            membershipStatus,
-            memberCount: becameActive ? (pod.memberCount || 0) + 1 : pod.memberCount,
-          };
-        }),
+            return {
+              ...pod,
+              membershipStatus,
+              memberCount: becameActive ? (pod.memberCount || 0) + 1 : pod.memberCount,
+            };
+          }),
       );
 
       if (membershipStatus === "ACTIVE") {
@@ -599,7 +602,7 @@ export default function DashboardPage({ user, onLogout }) {
     setPostActionError("");
 
     try {
-      const result = await createPodPost(activeGroup.id, { content });
+      const result = await createPodPost(activeGroup.id, {content});
       setPostsByGroup((current) => ({
         ...current,
         [activeGroup.id]: [result.post, ...(current[activeGroup.id] || [])],
@@ -649,29 +652,29 @@ export default function DashboardPage({ user, onLogout }) {
       await leavePod(groupId);
 
       setJoinStatusByGroup((current) => {
-        const next = { ...current };
+        const next = {...current};
         delete next[groupId];
         return next;
       });
 
       setPods((current) =>
-        current.map((pod) => {
-          if (pod.id !== groupId) {
-            return pod;
-          }
+          current.map((pod) => {
+            if (pod.id !== groupId) {
+              return pod;
+            }
 
-          const wasActive = pod.membershipStatus === "ACTIVE";
-          const nextMemberCount = wasActive
-            ? Math.max(0, (typeof pod.memberCount === "number" ? pod.memberCount : 0) - 1)
-            : pod.memberCount;
+            const wasActive = pod.membershipStatus === "ACTIVE";
+            const nextMemberCount = wasActive
+                ? Math.max(0, (typeof pod.memberCount === "number" ? pod.memberCount : 0) - 1)
+                : pod.memberCount;
 
-          return {
-            ...pod,
-            membershipStatus: null,
-            membershipRole: null,
-            memberCount: nextMemberCount,
-          };
-        }),
+            return {
+              ...pod,
+              membershipStatus: null,
+              membershipRole: null,
+              memberCount: nextMemberCount,
+            };
+          }),
       );
 
       if (activeGroupId === groupId) {
@@ -687,299 +690,300 @@ export default function DashboardPage({ user, onLogout }) {
 
   function renderDiscoverView() {
     return (
-      <>
-        <header className="content-header">
-          <p className="eyebrow">Qwyse groups</p>
-          <h1>Discover Groups</h1>
-          <p>Find and join professional communities that match your current direction.</p>
-        </header>
+        <>
+          <header className="content-header">
+            <p className="eyebrow">Qwyse groups</p>
+            <h1>Discover Groups</h1>
+            <p>Find and join professional communities that match your current direction.</p>
+          </header>
 
-        <div className="tab-strip" role="tablist" aria-label="Group views">
-          <button
-            type="button"
-            className={activeTab === "discover" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("discover")}
-          >
-            Discover Groups
-          </button>
-          <button
-            type="button"
-            className={activeTab === "mine" ? "tab active" : "tab"}
-            onClick={() => setActiveTab("mine")}
-          >
-            My Groups
-          </button>
-        </div>
+          <div className="tab-strip" role="tablist" aria-label="Group views">
+            <button
+                type="button"
+                className={activeTab === "discover" ? "tab active" : "tab"}
+                onClick={() => setActiveTab("discover")}
+            >
+              Discover Groups
+            </button>
+            <button
+                type="button"
+                className={activeTab === "mine" ? "tab active" : "tab"}
+                onClick={() => setActiveTab("mine")}
+            >
+              My Groups
+            </button>
+          </div>
 
-        {activeTab === "discover" ? (
-          <>
-            <div className="search-row">
-              <label className="search-input">
-                <AppIcon name="search" />
-                <input
-                  type="search"
-                  placeholder="Search groups..."
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                />
-              </label>
-            </div>
+          {activeTab === "discover" ? (
+              <>
+                <div className="search-row">
+                  <label className="search-input">
+                    <AppIcon name="search"/>
+                    <input
+                        type="search"
+                        placeholder="Search groups..."
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                    />
+                  </label>
+                </div>
 
-            <div className="filter-row">
-              <div className="filter-label">
-                <AppIcon name="filter" />
-                <span>Filters:</span>
-              </div>
-              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                {categoryOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <select value={sizeFilter} onChange={(event) => setSizeFilter(event.target.value)}>
-                {sizeOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
-                {activityOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="filter-row">
+                  <div className="filter-label">
+                    <AppIcon name="filter"/>
+                    <span>Filters:</span>
+                  </div>
+                  <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                    {categoryOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                    ))}
+                  </select>
+                  <select value={sizeFilter} onChange={(event) => setSizeFilter(event.target.value)}>
+                    {sizeOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                    ))}
+                  </select>
+                  <select value={activityFilter} onChange={(event) => setActivityFilter(event.target.value)}>
+                    {activityOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                    ))}
+                  </select>
+                </div>
 
-            <p className="results-count">{filteredGroups.length} groups found</p>
+                <p className="results-count">{filteredGroups.length} groups found</p>
 
-            {podsLoading && <p className="helper-copy">Loading groups...</p>}
-            {!podsLoading && podsError && <p className="error-banner">{podsError}</p>}
+                {podsLoading && <p className="helper-copy">Loading groups...</p>}
+                {!podsLoading && podsError && <p className="error-banner">{podsError}</p>}
 
-            {!podsLoading && !podsError && (
-              <div className="group-grid">
-                {filteredGroups.map((group) => (
-                  <article
-                    key={group.id}
-                    className="group-card group-card-clickable"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleGroupCardClick(group)}
-                    onKeyDown={(event) => handleGroupCardKeyDown(event, group)}
-                  >
-                    <div className="group-emblem">{group.badge}</div>
-                    <div className="group-card-content">
-                      <h2>{group.name}</h2>
-                      <p>{group.description}</p>
+                {!podsLoading && !podsError && (
+                    <div className="group-grid">
+                      {filteredGroups.map((group) => (
+                          <article
+                              key={group.id}
+                              className="group-card group-card-clickable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => handleGroupCardClick(group)}
+                              onKeyDown={(event) => handleGroupCardKeyDown(event, group)}
+                          >
+                            <div className="group-emblem">{group.badge}</div>
+                            <div className="group-card-content">
+                              <h2>{group.name}</h2>
+                              <p>{group.description}</p>
 
-                      <div className="group-tags">
-                        {group.tags.slice(0, 4).map((tag) => (
-                          <span key={tag} className="group-tag">
-                            <AppIcon name="tag" />
-                            {tag}
+                              <div className="group-tags">
+                                {group.tags.slice(0, 4).map((tag) => (
+                                    <span key={tag} className="group-tag">
+                            <AppIcon name="tag"/>
+                                      {tag}
                           </span>
-                        ))}
-                      </div>
+                                ))}
+                              </div>
 
-                      <div className="group-footer">
+                              <div className="group-footer">
                         <span className="member-pill">
-                          <AppIcon name="users" />
+                          <AppIcon name="users"/>
                           {group.members.toLocaleString()} members
                         </span>
-                        <span className="activity-pill">{group.activity}</span>
-                      </div>
+                                <span className="activity-pill">{group.activity}</span>
+                              </div>
+                            </div>
+                          </article>
+                      ))}
                     </div>
-                  </article>
-                ))}
-              </div>
-            )}
+                )}
 
-            <button type="button" className="floating-action">
-              + Create Group
-            </button>
-          </>
-        ) : (
-          <>
-            {myGroups.length > 0 ? (
-              <div className="group-grid my-groups-grid">
-                {myGroups.map((group) => (
-                  <article
-                    key={group.id}
-                    className="group-card group-card-clickable"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleGroupCardClick(group)}
-                    onKeyDown={(event) => handleGroupCardKeyDown(event, group)}
-                  >
-                    <div className="group-emblem">{group.badge}</div>
-                    <div className="group-card-content">
-                      <h2>{group.name}</h2>
-                      <p>{group.description}</p>
-                      <div className="group-footer">
-                        <span className="member-pill">{statusText(getGroupMembershipStatus(group))}</span>
-                      </div>
+                <button type="button" className="floating-action">
+                  + Create Group
+                </button>
+              </>
+          ) : (
+              <>
+                {myGroups.length > 0 ? (
+                    <div className="group-grid my-groups-grid">
+                      {myGroups.map((group) => (
+                          <article
+                              key={group.id}
+                              className="group-card group-card-clickable"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => handleGroupCardClick(group)}
+                              onKeyDown={(event) => handleGroupCardKeyDown(event, group)}
+                          >
+                            <div className="group-emblem">{group.badge}</div>
+                            <div className="group-card-content">
+                              <h2>{group.name}</h2>
+                              <p>{group.description}</p>
+                              <div className="group-footer">
+                                <span className="member-pill">{statusText(getGroupMembershipStatus(group))}</span>
+                              </div>
+                            </div>
+                          </article>
+                      ))}
                     </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <h2>No joined groups yet</h2>
-                <p>
-                  Open a group and request to join. Your requested groups will show up here while you
-                  wait for approval.
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </>
+                ) : (
+                    <div className="empty-state">
+                      <h2>No joined groups yet</h2>
+                      <p>
+                        Open a group and request to join. Your requested groups will show up here while you
+                        wait for approval.
+                      </p>
+                    </div>
+                )}
+              </>
+          )}
+        </>
     );
   }
 
   function renderGroupDetailView() {
     if (!activeGroup) {
       return (
-        <div className="empty-state">
-          <h2>Group not available</h2>
-          <p>Please return to discovery and select a group again.</p>
-        </div>
+          <div className="empty-state">
+            <h2>Group not available</h2>
+            <p>Please return to discovery and select a group again.</p>
+          </div>
       );
     }
 
     const status = joinStatusByGroup[activeGroup.id] || "none";
     const effectiveStatus = status === "none" ? activeGroup.membershipStatus : status;
     const joinDisabled =
-      joiningPodId === activeGroup.id || effectiveStatus === "PENDING" || effectiveStatus === "ACTIVE";
+        joiningPodId === activeGroup.id || effectiveStatus === "PENDING" || effectiveStatus === "ACTIVE";
     const joinLabel =
-      effectiveStatus === "PENDING"
-        ? "Request Pending"
-        : effectiveStatus === "ACTIVE"
-          ? "Joined"
-          : activeGroup.joinActionLabel;
+        effectiveStatus === "PENDING"
+            ? "Request Pending"
+            : effectiveStatus === "ACTIVE"
+                ? "Joined"
+                : activeGroup.joinActionLabel;
     const canLeave = effectiveStatus === "ACTIVE" || effectiveStatus === "PENDING";
     const leaveLabel = effectiveStatus === "PENDING" ? "Cancel Request" : "Leave Group";
 
     return (
-      <>
-        <button type="button" className="inline-back" onClick={() => setGroupView("discover")}>
-          <AppIcon name="arrow-left" />
-          Back to Discovery
-        </button>
+        <>
+          <button type="button" className="inline-back" onClick={() => setGroupView("discover")}>
+            <AppIcon name="arrow-left"/>
+            Back to Discovery
+          </button>
 
-        <section className="group-detail-hero">
-          <div className="group-emblem large">{activeGroup.badge}</div>
-          <div className="group-detail-main">
-            <h1 className="group-title">{activeGroup.name}</h1>
-            <div className="group-meta-row">
+          <section className="group-detail-hero">
+            <div className="group-emblem large">{activeGroup.badge}</div>
+            <div className="group-detail-main">
+              <h1 className="group-title">{activeGroup.name}</h1>
+              <div className="group-meta-row">
               <span>
-                <AppIcon name="users" />
+                <AppIcon name="users"/>
                 {activeGroup.members > 0
-                  ? `${activeGroup.members.toLocaleString()} members`
-                  : "No members yet"}
+                    ? `${activeGroup.members.toLocaleString()} members`
+                    : "No members yet"}
               </span>
-              <span>
-                <AppIcon name="calendar" />
+                <span>
+                <AppIcon name="calendar"/>
                 Created {activeGroup.createdAt}
               </span>
-              <span>
-                <AppIcon name="lock" />
-                {activeGroup.visibility === "PRIVATE" ? "Private" : "Public"}
+                <span>
+                <AppIcon name="lock"/>
+                  {activeGroup.visibility === "PRIVATE" ? "Private" : "Public"}
               </span>
-            </div>
-            <p className="group-description">{activeGroup.description}</p>
-            {activeGroup.tags.length > 0 && (
-              <div className="group-tags">
-                {activeGroup.tags.map((tag) => (
-                  <span key={tag} className="group-tag">
-                    <AppIcon name="tag" />
-                    {tag}
-                  </span>
-                ))}
               </div>
-            )}
-            <div className="hero-actions">
-              <button
-                type="button"
-                className="floating-action detail-join"
-                disabled={joinDisabled}
-                onClick={() => requestToJoin(activeGroup.id)}
-              >
-                {joinLabel.toUpperCase()}
-              </button>
-              <button type="button" className="secondary-action" onClick={() => openFeed(activeGroup.id)}>
-                View Feed
-              </button>
-              {canLeave && (
-                <button
-                  type="button"
-                  className="secondary-action danger-action"
-                  disabled={leavingPodId === activeGroup.id}
-                  onClick={() => handleLeaveGroup(activeGroup.id)}
-                >
-                  {leavingPodId === activeGroup.id ? "Leaving..." : leaveLabel}
-                </button>
+              <p className="group-description">{activeGroup.description}</p>
+              {activeGroup.tags.length > 0 && (
+                  <div className="group-tags">
+                    {activeGroup.tags.map((tag) => (
+                        <span key={tag} className="group-tag">
+                    <AppIcon name="tag"/>
+                          {tag}
+                  </span>
+                    ))}
+                  </div>
               )}
-            </div>
-            {joinActionError && <p className="error-banner">{joinActionError}</p>}
-          </div>
-        </section>
-
-        <section className="group-detail-grid">
-          <div className="group-detail-left">
-            <article className="detail-card">
-              <h2>Group Details</h2>
-              <ul className="detail-list">
-                <li>Focus Area: {activeGroup.category}</li>
-                <li>Visibility: {activeGroup.visibility === "PRIVATE" ? "Private" : "Public"}</li>
-                <li>Membership Status: {statusText(effectiveStatus)}</li>
-              </ul>
-            </article>
-
-            <article className="detail-card">
-              <h2>Posts</h2>
-              <p className="helper-copy">No posts yet.</p>
-            </article>
-          </div>
-
-          <div className="group-detail-right">
-            <article className="detail-card compact">
-              <h2>Members</h2>
-              <p className="stat-line">
-                {activeGroup.members > 0
-                  ? `${activeGroup.members.toLocaleString()} member${activeGroup.members === 1 ? "" : "s"}`
-                  : "No members yet."}
-              </p>
-            </article>
-
-            <article className="detail-card compact">
-              <h2>Admins</h2>
-              <p className="stat-line">
-                {activeGroup.adminCount > 0
-                  ? `${activeGroup.adminCount} admin${activeGroup.adminCount === 1 ? "" : "s"}`
-                  : "No admins yet."}
-              </p>
-            </article>
-
-            <article className="detail-card compact">
-              <h2>Related Groups</h2>
-              <div className="related-list">
-                {relatedGroups.length > 0 ? (
-                  relatedGroups.map((group) => (
-                    <button key={group.id} type="button" className="related-item" onClick={() => openGroup(group.id)}>
-                      {group.name}
+              <div className="hero-actions">
+                <button
+                    type="button"
+                    className="floating-action detail-join"
+                    disabled={joinDisabled}
+                    onClick={() => requestToJoin(activeGroup.id)}
+                >
+                  {joinLabel.toUpperCase()}
+                </button>
+                <button type="button" className="secondary-action" onClick={() => openFeed(activeGroup.id)}>
+                  View Feed
+                </button>
+                {canLeave && (
+                    <button
+                        type="button"
+                        className="secondary-action danger-action"
+                        disabled={leavingPodId === activeGroup.id}
+                        onClick={() => handleLeaveGroup(activeGroup.id)}
+                    >
+                      {leavingPodId === activeGroup.id ? "Leaving..." : leaveLabel}
                     </button>
-                  ))
-                ) : (
-                  <p className="stat-line">No related groups yet.</p>
                 )}
               </div>
-            </article>
-          </div>
-        </section>
-      </>
+              {joinActionError && <p className="error-banner">{joinActionError}</p>}
+            </div>
+          </section>
+
+          <section className="group-detail-grid">
+            <div className="group-detail-left">
+              <article className="detail-card">
+                <h2>Group Details</h2>
+                <ul className="detail-list">
+                  <li>Focus Area: {activeGroup.category}</li>
+                  <li>Visibility: {activeGroup.visibility === "PRIVATE" ? "Private" : "Public"}</li>
+                  <li>Membership Status: {statusText(effectiveStatus)}</li>
+                </ul>
+              </article>
+
+              <article className="detail-card">
+                <h2>Posts</h2>
+                <p className="helper-copy">No posts yet.</p>
+              </article>
+            </div>
+
+            <div className="group-detail-right">
+              <article className="detail-card compact">
+                <h2>Members</h2>
+                <p className="stat-line">
+                  {activeGroup.members > 0
+                      ? `${activeGroup.members.toLocaleString()} member${activeGroup.members === 1 ? "" : "s"}`
+                      : "No members yet."}
+                </p>
+              </article>
+
+              <article className="detail-card compact">
+                <h2>Admins</h2>
+                <p className="stat-line">
+                  {activeGroup.adminCount > 0
+                      ? `${activeGroup.adminCount} admin${activeGroup.adminCount === 1 ? "" : "s"}`
+                      : "No admins yet."}
+                </p>
+              </article>
+
+              <article className="detail-card compact">
+                <h2>Related Groups</h2>
+                <div className="related-list">
+                  {relatedGroups.length > 0 ? (
+                      relatedGroups.map((group) => (
+                          <button key={group.id} type="button" className="related-item"
+                                  onClick={() => openGroup(group.id)}>
+                            {group.name}
+                          </button>
+                      ))
+                  ) : (
+                      <p className="stat-line">No related groups yet.</p>
+                  )}
+                </div>
+              </article>
+            </div>
+          </section>
+        </>
     );
   }
 
@@ -1001,7 +1005,7 @@ export default function DashboardPage({ user, onLogout }) {
     return (
         <>
           <button type="button" className="inline-back" onClick={() => setGroupView("detail")}>
-            <AppIcon name="arrow-left" />
+            <AppIcon name="arrow-left"/>
             Back to Group
           </button>
 
@@ -1019,18 +1023,18 @@ export default function DashboardPage({ user, onLogout }) {
                 View Members
               </button>
               {canLeaveGroup && (
-                <button
-                  type="button"
-                  className="secondary-action danger-action"
-                  disabled={leavingPodId === activeGroup.id}
-                  onClick={() => handleLeaveGroup(activeGroup.id)}
-                >
-                  {leavingPodId === activeGroup.id
-                    ? "Leaving..."
-                    : membershipStatus === "PENDING"
-                      ? "Cancel Request"
-                      : "Leave Group"}
-                </button>
+                  <button
+                      type="button"
+                      className="secondary-action danger-action"
+                      disabled={leavingPodId === activeGroup.id}
+                      onClick={() => handleLeaveGroup(activeGroup.id)}
+                  >
+                    {leavingPodId === activeGroup.id
+                        ? "Leaving..."
+                        : membershipStatus === "PENDING"
+                            ? "Cancel Request"
+                            : "Leave Group"}
+                  </button>
               )}
               <button type="button" className="secondary-action">
                 Group Settings
@@ -1038,159 +1042,164 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
           </header>
 
-        <section className="feed-layout">
-          <div className="feed-main-column">
-            {postSuccessMessage && (
-              <p className="success-toast" role="status" aria-live="polite">
-                {postSuccessMessage}
-              </p>
-            )}
+          <section className="feed-layout">
+            <div className="feed-main-column">
+              <ProgressDashboard podId={activeGroup.id}/>
+              <CelebrationFeed podId={activeGroup.id}/>
 
-            <article className="detail-card composer-card">
-              {canPost ? (
-                <>
-                  <textarea
-                    className="composer-input"
-                    value={postDraft}
-                    onChange={(event) => setPostDraft(event.target.value)}
-                    placeholder="Share an update with this group..."
-                    rows={4}
-                    maxLength={2000}
-                  />
-                  <div className="composer-actions">
-                    <small>{postDraft.trim().length}/2000</small>
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      disabled={postingPodId === activeGroup.id || postDraft.trim().length === 0}
-                      onClick={handleCreatePost}
-                    >
-                      {postingPodId === activeGroup.id ? "Posting..." : "Create Post"}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p className="helper-copy">Join this group as an active member to create posts.</p>
+              {postSuccessMessage && (
+                  <p className="success-toast" role="status" aria-live="polite">
+                    {postSuccessMessage}
+                  </p>
               )}
-              {postActionError && <p className="error-banner">{postActionError}</p>}
-            </article>
 
-            {feedTagOptions.length > 1 && (
-              <article className="detail-card">
-                <div className="filter-label">
-                  <AppIcon name="filter" />
-                  <span>Filter by tag:</span>
-                </div>
-                <div className="feed-tag-row">
-                  {feedTagOptions.map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className={feedTagFilter === tag ? "feed-tag active" : "feed-tag"}
-                      onClick={() => setFeedTagFilter(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
+              <article className="detail-card composer-card">
+                {canPost ? (
+                    <>
+                  <textarea
+                      className="composer-input"
+                      value={postDraft}
+                      onChange={(event) => setPostDraft(event.target.value)}
+                      placeholder="Share an update with this group..."
+                      rows={4}
+                      maxLength={2000}
+                  />
+                      <div className="composer-actions">
+                        <small>{postDraft.trim().length}/2000</small>
+                        <button
+                            type="button"
+                            className="secondary-action"
+                            disabled={postingPodId === activeGroup.id || postDraft.trim().length === 0}
+                            onClick={handleCreatePost}
+                        >
+                          {postingPodId === activeGroup.id ? "Posting..." : "Create Post"}
+                        </button>
+                      </div>
+                    </>
+                ) : (
+                    <p className="helper-copy">Join this group as an active member to create posts.</p>
+                )}
+                {postActionError && <p className="error-banner">{postActionError}</p>}
               </article>
-            )}
 
-            {postsLoading ? (
-              <article className="detail-card">
-                <p className="helper-copy">Loading posts...</p>
-              </article>
-            ) : filteredFeedPosts.length > 0 ? (
-              filteredFeedPosts.map((post) => (
-              <article
-                id={`post-${post.id}`}
-                key={post.id}
-                className={
-                  post.id === highlightedPostId
-                    ? "detail-card post-card post-card-highlight"
-                    : "detail-card post-card"
-                }
-              >
-                <header className="post-header">
-                  <div className="post-header-left">
-                    <AvatarBadge
-                      key={post.author?.id || post.id}
-                      className="feed-author-avatar"
-                      imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
-                      label={post.author?.fullName || post.author?.email || "Member"}
-                    />
-                    <div>
-                      <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
-                      <small>{formatPostTimestamp(post.createdAt)}</small>
+              <BiWeeklyRituals podId={activeGroup.id} user={user}/>
+
+              {feedTagOptions.length > 1 && (
+                  <article className="detail-card">
+                    <div className="filter-label">
+                      <AppIcon name="filter"/>
+                      <span>Filter by tag:</span>
                     </div>
-                  </div>
-                  {post.authorId === user.id && (
-                    <button
+                    <div className="feed-tag-row">
+                      {feedTagOptions.map((tag) => (
+                          <button
+                              key={tag}
+                              type="button"
+                              className={feedTagFilter === tag ? "feed-tag active" : "feed-tag"}
+                              onClick={() => setFeedTagFilter(tag)}
+                          >
+                            {tag}
+                          </button>
+                      ))}
+                    </div>
+                  </article>
+              )}
+
+              {postsLoading ? (
+                  <article className="detail-card">
+                    <p className="helper-copy">Loading posts...</p>
+                  </article>
+              ) : filteredFeedPosts.length > 0 ? (
+                  filteredFeedPosts.map((post) => (
+                      <article
+                          id={`post-${post.id}`}
+                          key={post.id}
+                          className={
+                            post.id === highlightedPostId
+                                ? "detail-card post-card post-card-highlight"
+                                : "detail-card post-card"
+                          }
+                      >
+                        <header className="post-header">
+                          <div className="post-header-left">
+                            <AvatarBadge
+                                key={post.author?.id || post.id}
+                                className="feed-author-avatar"
+                                imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
+                                label={post.author?.fullName || post.author?.email || "Member"}
+                            />
+                            <div>
+                              <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
+                              <small>{formatPostTimestamp(post.createdAt)}</small>
+                            </div>
+                          </div>
+                          {post.authorId === user.id && (
+                              <button
+                                  type="button"
+                                  className="post-delete-button"
+                                  disabled={deletingPostId === post.id}
+                                  onClick={() => handleDeletePost(post.id)}
+                              >
+                                {deletingPostId === post.id ? "Deleting..." : "Delete"}
+                              </button>
+                          )}
+                        </header>
+                        <p>{post.content}</p>
+                      </article>
+                  ))
+              ) : (
+                  <article className="detail-card">
+                    <h2>No posts yet</h2>
+                    <p className="helper-copy">This group has no posts yet.</p>
+                  </article>
+              )}
+            </div>
+
+            <aside className="feed-sidebar-column">
+              <article className="detail-card compact">
+                <h2>Group Stats</h2>
+                <p className="stat-line split">
+                  <span>Members</span>
+                  <span>{activeGroup.members}</span>
+                </p>
+                <p className="stat-line split">
+                  <span>Admins</span>
+                  <span>{activeGroup.adminCount}</span>
+                </p>
+                <p className="stat-line split">
+                  <span>Posts</span>
+                  <span>{activeGroupPosts.length}</span>
+                </p>
+              </article>
+
+              <article className="detail-card compact">
+                <h2>About Group</h2>
+                <p>
+                  {activeGroup.members > 0
+                      ? `${activeGroup.members.toLocaleString()} members`
+                      : "No members yet."}
+                </p>
+                <p>{activeGroup.visibility === "PRIVATE" ? "Private group" : "Public group"}</p>
+                <p>Created {activeGroup.createdAt}</p>
+              </article>
+            </aside>
+          </section>
+          {showMembersView && (
+              <section className="members-view-section">
+                <div className="members-view-header">
+                  <h2>Pod Members</h2>
+                  <button
                       type="button"
-                      className="post-delete-button"
-                      disabled={deletingPostId === post.id}
-                      onClick={() => handleDeletePost(post.id)}
-                    >
-                      {deletingPostId === post.id ? "Deleting..." : "Delete"}
-                    </button>
-                  )}
-                </header>
-                <p>{post.content}</p>
-              </article>
-              ))
-            ) : (
-              <article className="detail-card">
-                <h2>No posts yet</h2>
-                <p className="helper-copy">This group has no posts yet.</p>
-              </article>
-            )}
-          </div>
-
-          <aside className="feed-sidebar-column">
-            <article className="detail-card compact">
-              <h2>Group Stats</h2>
-              <p className="stat-line split">
-                <span>Members</span>
-                <span>{activeGroup.members}</span>
-              </p>
-              <p className="stat-line split">
-                <span>Admins</span>
-                <span>{activeGroup.adminCount}</span>
-              </p>
-              <p className="stat-line split">
-                <span>Posts</span>
-                <span>{activeGroupPosts.length}</span>
-              </p>
-            </article>
-
-            <article className="detail-card compact">
-              <h2>About Group</h2>
-              <p>
-                {activeGroup.members > 0
-                  ? `${activeGroup.members.toLocaleString()} members`
-                  : "No members yet."}
-              </p>
-              <p>{activeGroup.visibility === "PRIVATE" ? "Private group" : "Public group"}</p>
-              <p>Created {activeGroup.createdAt}</p>
-            </article>
-          </aside>
-        </section>
-        {showMembersView && (
-            <section className="members-view-section">
-              <div className="members-view-header">
-                <h2>Pod Members</h2>
-                <button
-                    type="button"
-                    className="close-button"
-                    onClick={toggleMembersView}
-                >
-                  ×
-                </button>
-              </div>
-              <PodMembersList podId={activeGroup.id} />
-            </section>
-        )}
-      </>
+                      className="close-button"
+                      onClick={toggleMembersView}
+                  >
+                    ×
+                  </button>
+                </div>
+                <PodMembersList podId={activeGroup.id}/>
+              </section>
+          )}
+        </>
     );
   }
 
@@ -1208,51 +1217,54 @@ export default function DashboardPage({ user, onLogout }) {
   }
 
   return (
-    <main className="workspace-shell">
-      <WorkspaceSidebar
-        navItems={NAV_ITEMS}
-        activeSection={activeSection}
-        onSelectSection={handleSidebarSectionSelect}
-        onLogout={onLogout}
-        renderIcon={(name) => <AppIcon name={name} />}
-      />
+      <main className="workspace-shell">
+        <WorkspaceSidebar
+            navItems={NAV_ITEMS}
+            activeSection={activeSection}
+            onSelectSection={handleSidebarSectionSelect}
+            onLogout={onLogout}
+            renderIcon={(name) => <AppIcon name={name}/>}
+        />
 
-      <div className="workspace-main">
-        <header className="workspace-topbar">
-          <div className="status-chip">Workspace</div>
-          <div className="user-chip">
-            <AvatarBadge
-              key={userAvatarUrl || user.id}
-              className="user-avatar"
-              imageUrl={userAvatarUrl}
-              label={user.fullName || user.email || userInitial}
-            />
-            <div>
-              <p className="user-name">{user.fullName || user.email}</p>
-              <p className="user-meta">{user.careerStage || "Member"}</p>
+        <div className="workspace-main">
+          <header className="workspace-topbar">
+            <div className="status-chip">Workspace</div>
+            <div style={{display: "flex", alignItems: "center", gap: "1rem"}}>
+              <NotificationBell/>
+              <div className="user-chip">
+                <AvatarBadge
+                    key={userAvatarUrl || user.id}
+                    className="user-avatar"
+                    imageUrl={userAvatarUrl}
+                    label={user.fullName || user.email || userInitial}
+                />
+                <div>
+                  <p className="user-name">{user.fullName || user.email}</p>
+                  <p className="user-meta">{user.careerStage || "Member"}</p>
+                </div>
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {activeSection === "groups" ? (
-          <section className="content-shell groups-shell">{renderGroupsContent()}</section>
-        ) : (
-          renderPlaceholderSection(activeSection)
+          {activeSection === "groups" ? (
+              <section className="content-shell groups-shell">{renderGroupsContent()}</section>
+          ) : (
+              renderPlaceholderSection(activeSection)
+          )}
+        </div>
+
+        {showOnboardingModal && activeGroup && (
+            <PodOnboardingModal
+                pod={activeGroup}
+                user={user}
+                onComplete={() => {
+                  setShowOnboardingModal(false);
+                  checkOnboardingStatus(activeGroup.id);
+                  loadGroupPosts(activeGroup.id);
+                }}
+                onClose={() => setShowOnboardingModal(false)}
+            />
         )}
-      </div>
-      {showOnboardingModal && activeGroup && (
-          <PodOnboardingModal
-              pod={activeGroup}
-              user={user}
-              onComplete={() => {
-                setShowOnboardingModal(false);
-                // Refresh onboarding status
-                checkOnboardingStatus(activeGroup.id);
-                loadGroupPosts(activeGroup.id);
-              }}
-              onClose={() => setShowOnboardingModal(false)}
-          />
-      )}
-    </main>
+      </main>
   );
 }
