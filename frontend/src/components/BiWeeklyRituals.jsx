@@ -15,11 +15,6 @@ export default function BiWeeklyRituals({ podId, userId }) {
     const [message, setMessage] = useState("");
     const [error, setError] = useState("");
 
-    useEffect(() => {
-        loadRituals();
-        loadPodCheckIns();
-    }, [podId]);
-
     async function loadRituals() {
         setLoading(true);
         try {

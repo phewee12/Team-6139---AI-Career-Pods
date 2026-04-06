@@ -7,6 +7,8 @@ import {
   getPods,
   joinPod,
   leavePod,
+  prefetchPodFeatureData,
+  resetTestDatabase,
 } from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import PodMembersList from "../components/PodMembersList";
@@ -15,6 +17,7 @@ import BiWeeklyRituals from "../components/BiWeeklyRituals";
 import ProgressDashboard from "../components/ProgressDashboard";
 import CelebrationFeed from "../components/CelebrationFeed";
 import NotificationBell from "../components/NotificationBell";
+import ResumeReviewPanel from "../components/ResumeReviewPanel";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -258,6 +261,7 @@ export default function DashboardPage({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState("groups");
   const [activeTab, setActiveTab] = useState("discover");
   const [groupView, setGroupView] = useState("discover");
+  const [activeGroupFeature, setActiveGroupFeature] = useState("feed");
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -282,26 +286,22 @@ export default function DashboardPage({ user, onLogout }) {
   const [podsLoading, setPodsLoading] = useState(true);
   const [podsError, setPodsError] = useState("");
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
-  const [showMembersView, setShowMembersView] = useState(false);
+  const [resettingDb, setResettingDb] = useState(false);
+  const [resetDbError, setResetDbError] = useState("");
 
   async function checkOnboardingStatus(groupId) {
     try {
       const result = await getPodOnboarding(groupId);
-      console.log("2. Onboarding API result:", result);
-
       if (!result.onboarded && result.canOnboard) {
-        console.log("3. Conditions met, showing modal");
         setShowOnboardingModal(true);
-      } else {
-        console.log("3. Conditions not met:", {onboarded: result.onboarded, canOnboard: result.canOnboard});
+        return false;
       }
+
+      return true;
     } catch (error) {
       console.error("Failed to check onboarding:", error);
+      return false;
     }
-  }
-
-  function toggleMembersView() {
-    setShowMembersView(!showMembersView);
   }
 
   useEffect(() => {
@@ -493,16 +493,41 @@ export default function DashboardPage({ user, onLogout }) {
     setJoinActionError("");
     setActiveGroupId(groupId);
     setGroupView("detail");
+    prefetchPodFeatureData(groupId);
   }
 
-  function openFeed(groupId) {
+  async function openFeed(groupId) {
+    await openGroupFeature("feed", groupId);
+  }
+
+  async function openGroupFeature(featureId, groupId = activeGroupId) {
+    if (!groupId) {
+      return;
+    }
+
+    const group = discoverGroups.find((item) => item.id === groupId);
+    const membershipStatus = group ? getGroupMembershipStatus(group) : null;
+    if (membershipStatus === "ACTIVE") {
+      const isOnboarded = await checkOnboardingStatus(groupId);
+      if (!isOnboarded) {
+        setActiveGroupId(groupId);
+        setGroupView("detail");
+        return;
+      }
+    }
+
     setJoinActionError("");
     setPostActionError("");
     setActiveGroupId(groupId);
-    setFeedTagFilter("All Posts");
+    setActiveGroupFeature(featureId);
     setGroupView("feed");
-    setPostDraft("");
-    loadGroupPosts(groupId);
+    prefetchPodFeatureData(groupId);
+
+    if (featureId === "feed") {
+      setFeedTagFilter("All Posts");
+      setPostDraft("");
+      loadGroupPosts(groupId);
+    }
   }
 
   function getGroupMembershipStatus(group) {
@@ -513,7 +538,7 @@ export default function DashboardPage({ user, onLogout }) {
     const membershipStatus = getGroupMembershipStatus(group);
 
     if (membershipStatus === "ACTIVE") {
-      openFeed(group.id);
+      void openFeed(group.id);
       return;
     }
 
@@ -559,8 +584,13 @@ export default function DashboardPage({ user, onLogout }) {
       );
 
       if (membershipStatus === "ACTIVE") {
-        await checkOnboardingStatus(groupId);
-        openFeed(groupId);
+        const isOnboarded = await checkOnboardingStatus(groupId);
+        if (isOnboarded) {
+          await openFeed(groupId);
+        } else {
+          setActiveGroupId(groupId);
+          setGroupView("detail");
+        }
       }
     } catch (error) {
       setJoinActionError(error.message || "Could not update membership.");
@@ -820,8 +850,22 @@ export default function DashboardPage({ user, onLogout }) {
                             <div className="group-card-content">
                               <h2>{group.name}</h2>
                               <p>{group.description}</p>
+
+                              <div className="group-tags">
+                                {group.tags.slice(0, 4).map((tag) => (
+                                    <span key={tag} className="group-tag">
+                            <AppIcon name="tag"/>
+                                      {tag}
+                          </span>
+                                ))}
+                              </div>
+
                               <div className="group-footer">
-                                <span className="member-pill">{statusText(getGroupMembershipStatus(group))}</span>
+                                <span className="member-pill">
+                          <AppIcon name="users"/>
+                          {group.members.toLocaleString()} members
+                        </span>
+                                <span className="activity-pill">{statusText(getGroupMembershipStatus(group))}</span>
                               </div>
                             </div>
                           </article>
@@ -912,8 +956,14 @@ export default function DashboardPage({ user, onLogout }) {
                 >
                   {joinLabel.toUpperCase()}
                 </button>
-                <button type="button" className="secondary-action" onClick={() => openFeed(activeGroup.id)}>
-                  View Feed
+                <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() => {
+                      void openGroupFeature("feed", activeGroup.id);
+                    }}
+                >
+                  Open Group Features
                 </button>
                 {canLeave && (
                     <button
@@ -1001,6 +1051,165 @@ export default function DashboardPage({ user, onLogout }) {
     const canPost = membershipStatus === "ACTIVE";
     const postsLoading = postsLoadingByGroup[activeGroup.id] === true;
     const canLeaveGroup = membershipStatus === "ACTIVE" || membershipStatus === "PENDING";
+    const featureNavItems = [
+      { id: "feed", label: "Feed", icon: "message" },
+      { id: "biweekly", label: "Bi-Weekly Progress", icon: "calendar" },
+      { id: "resume", label: "Resume Review", icon: "briefcase" },
+      { id: "members", label: "Members", icon: "users" },
+    ];
+
+    function renderFeatureContent() {
+      if (activeGroupFeature === "biweekly") {
+        return (
+          <>
+            <header className="feature-page-header">
+              <h2>Bi-Weekly Progress</h2>
+              <p className="helper-copy">Track rituals, accountability, and momentum for this pod.</p>
+            </header>
+            <ProgressDashboard podId={activeGroup.id}/>
+            <CelebrationFeed podId={activeGroup.id}/>
+            <BiWeeklyRituals podId={activeGroup.id} user={user}/>
+          </>
+        );
+      }
+
+      if (activeGroupFeature === "resume") {
+        return (
+          <article className="detail-card">
+            <header className="feature-page-header">
+              <h2>Resume Review</h2>
+              <p className="helper-copy">Request and review resumes with structured feedback.</p>
+            </header>
+            <ResumeReviewPanel
+              podId={activeGroup.id}
+              user={user}
+              isAdmin={activeGroup.membershipRole === "ADMIN"}
+            />
+          </article>
+        );
+      }
+
+      if (activeGroupFeature === "members") {
+        return (
+          <article className="detail-card">
+            <header className="feature-page-header">
+              <h2>Members</h2>
+              <p className="helper-copy">View active pod members and profile details.</p>
+            </header>
+            <PodMembersList podId={activeGroup.id}/>
+          </article>
+        );
+      }
+
+      return (
+        <>
+          {postSuccessMessage && (
+              <p className="success-toast" role="status" aria-live="polite">
+                {postSuccessMessage}
+              </p>
+          )}
+
+          <article className="detail-card composer-card">
+            {canPost ? (
+                <>
+              <textarea
+                  className="composer-input"
+                  value={postDraft}
+                  onChange={(event) => setPostDraft(event.target.value)}
+                  placeholder="Share an update with this group..."
+                  rows={4}
+                  maxLength={2000}
+              />
+                  <div className="composer-actions">
+                    <small>{postDraft.trim().length}/2000</small>
+                    <button
+                        type="button"
+                        className="secondary-action"
+                        disabled={postingPodId === activeGroup.id || postDraft.trim().length === 0}
+                        onClick={handleCreatePost}
+                    >
+                      {postingPodId === activeGroup.id ? "Posting..." : "Create Post"}
+                    </button>
+                  </div>
+                </>
+            ) : (
+                <p className="helper-copy">Join this group as an active member to create posts.</p>
+            )}
+            {postActionError && <p className="error-banner">{postActionError}</p>}
+          </article>
+
+          {feedTagOptions.length > 1 && (
+              <article className="detail-card">
+                <div className="filter-label">
+                  <AppIcon name="filter"/>
+                  <span>Filter by tag:</span>
+                </div>
+                <div className="feed-tag-row">
+                  {feedTagOptions.map((tag) => (
+                      <button
+                          key={tag}
+                          type="button"
+                          className={feedTagFilter === tag ? "feed-tag active" : "feed-tag"}
+                          onClick={() => setFeedTagFilter(tag)}
+                      >
+                        {tag}
+                      </button>
+                  ))}
+                </div>
+              </article>
+          )}
+
+          {postsLoading ? (
+              <article className="detail-card">
+                <p className="helper-copy">Loading posts...</p>
+              </article>
+          ) : filteredFeedPosts.length > 0 ? (
+              filteredFeedPosts.map((post) => (
+                  <article
+                      id={`post-${post.id}`}
+                      key={post.id}
+                      className={
+                        post.id === highlightedPostId
+                            ? "detail-card post-card post-card-highlight"
+                            : "detail-card post-card"
+                      }
+                  >
+                    <header className="post-header">
+                      <div className="post-header-left">
+                        <AvatarBadge
+                            key={post.author?.id || post.id}
+                            className="feed-author-avatar"
+                            imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
+                            label={post.author?.fullName || post.author?.email || "Member"}
+                        />
+                        <div>
+                          <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
+                          <small>{formatPostTimestamp(post.createdAt)}</small>
+                        </div>
+                      </div>
+                      {post.authorId === user.id && (
+                          <button
+                              type="button"
+                              className="post-delete-button"
+                              disabled={deletingPostId === post.id}
+                              onClick={() => handleDeletePost(post.id)}
+                          >
+                            {deletingPostId === post.id ? "Deleting..." : "Delete"}
+                          </button>
+                      )}
+                    </header>
+                    <p>{post.content}</p>
+                  </article>
+              ))
+          ) : (
+              <article className="detail-card">
+                <h2>No posts yet</h2>
+                <p className="helper-copy">This group has no posts yet.</p>
+              </article>
+          )}
+        </>
+      );
+    }
 
     return (
         <>
@@ -1012,16 +1221,9 @@ export default function DashboardPage({ user, onLogout }) {
           <header className="feed-header">
             <div>
               <h1 className="group-title">{activeGroup.name}</h1>
-              <p className="helper-copy">Group Feed</p>
+              <p className="helper-copy">Group features</p>
             </div>
             <div className="feed-actions">
-              <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={toggleMembersView}
-              >
-                View Members
-              </button>
               {canLeaveGroup && (
                   <button
                       type="button"
@@ -1044,120 +1246,31 @@ export default function DashboardPage({ user, onLogout }) {
 
           <section className="feed-layout">
             <div className="feed-main-column">
-              <ProgressDashboard podId={activeGroup.id}/>
-              <CelebrationFeed podId={activeGroup.id}/>
-
-              {postSuccessMessage && (
-                  <p className="success-toast" role="status" aria-live="polite">
-                    {postSuccessMessage}
-                  </p>
-              )}
-
-              <article className="detail-card composer-card">
-                {canPost ? (
-                    <>
-                  <textarea
-                      className="composer-input"
-                      value={postDraft}
-                      onChange={(event) => setPostDraft(event.target.value)}
-                      placeholder="Share an update with this group..."
-                      rows={4}
-                      maxLength={2000}
-                  />
-                      <div className="composer-actions">
-                        <small>{postDraft.trim().length}/2000</small>
-                        <button
-                            type="button"
-                            className="secondary-action"
-                            disabled={postingPodId === activeGroup.id || postDraft.trim().length === 0}
-                            onClick={handleCreatePost}
-                        >
-                          {postingPodId === activeGroup.id ? "Posting..." : "Create Post"}
-                        </button>
-                      </div>
-                    </>
-                ) : (
-                    <p className="helper-copy">Join this group as an active member to create posts.</p>
-                )}
-                {postActionError && <p className="error-banner">{postActionError}</p>}
-              </article>
-
-              <BiWeeklyRituals podId={activeGroup.id} user={user}/>
-
-              {feedTagOptions.length > 1 && (
-                  <article className="detail-card">
-                    <div className="filter-label">
-                      <AppIcon name="filter"/>
-                      <span>Filter by tag:</span>
-                    </div>
-                    <div className="feed-tag-row">
-                      {feedTagOptions.map((tag) => (
-                          <button
-                              key={tag}
-                              type="button"
-                              className={feedTagFilter === tag ? "feed-tag active" : "feed-tag"}
-                              onClick={() => setFeedTagFilter(tag)}
-                          >
-                            {tag}
-                          </button>
-                      ))}
-                    </div>
-                  </article>
-              )}
-
-              {postsLoading ? (
-                  <article className="detail-card">
-                    <p className="helper-copy">Loading posts...</p>
-                  </article>
-              ) : filteredFeedPosts.length > 0 ? (
-                  filteredFeedPosts.map((post) => (
-                      <article
-                          id={`post-${post.id}`}
-                          key={post.id}
-                          className={
-                            post.id === highlightedPostId
-                                ? "detail-card post-card post-card-highlight"
-                                : "detail-card post-card"
-                          }
-                      >
-                        <header className="post-header">
-                          <div className="post-header-left">
-                            <AvatarBadge
-                                key={post.author?.id || post.id}
-                                className="feed-author-avatar"
-                                imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
-                                label={post.author?.fullName || post.author?.email || "Member"}
-                            />
-                            <div>
-                              <p className="post-author">{post.author?.fullName || post.author?.email || "Member"}</p>
-                              <small>{formatPostTimestamp(post.createdAt)}</small>
-                            </div>
-                          </div>
-                          {post.authorId === user.id && (
-                              <button
-                                  type="button"
-                                  className="post-delete-button"
-                                  disabled={deletingPostId === post.id}
-                                  onClick={() => handleDeletePost(post.id)}
-                              >
-                                {deletingPostId === post.id ? "Deleting..." : "Delete"}
-                              </button>
-                          )}
-                        </header>
-                        <p>{post.content}</p>
-                      </article>
-                  ))
-              ) : (
-                  <article className="detail-card">
-                    <h2>No posts yet</h2>
-                    <p className="helper-copy">This group has no posts yet.</p>
-                  </article>
-              )}
+              {renderFeatureContent()}
             </div>
 
             <aside className="feed-sidebar-column">
+              <article className="detail-card compact feature-nav-card">
+                <h2>Group Features</h2>
+                <div className="feature-list">
+                  {featureNavItems.map((feature) => (
+                    <button
+                      key={feature.id}
+                      type="button"
+                      className={activeGroupFeature === feature.id ? "feature-pill active" : "feature-pill"}
+                      onClick={() => {
+                        void openGroupFeature(feature.id, activeGroup.id);
+                      }}
+                    >
+                      <AppIcon name={feature.icon}/>
+                      {feature.label}
+                    </button>
+                  ))}
+                </div>
+              </article>
+
               <article className="detail-card compact">
-                <h2>Group Stats</h2>
+                <h2>This Week</h2>
                 <p className="stat-line split">
                   <span>Members</span>
                   <span>{activeGroup.members}</span>
@@ -1172,7 +1285,7 @@ export default function DashboardPage({ user, onLogout }) {
                 </p>
               </article>
 
-              <article className="detail-card compact">
+              <article className="detail-card compact group-about-card">
                 <h2>About Group</h2>
                 <p>
                   {activeGroup.members > 0
@@ -1182,23 +1295,10 @@ export default function DashboardPage({ user, onLogout }) {
                 <p>{activeGroup.visibility === "PRIVATE" ? "Private group" : "Public group"}</p>
                 <p>Created {activeGroup.createdAt}</p>
               </article>
+
+              <button type="button" className="secondary-action">Group Settings</button>
             </aside>
           </section>
-          {showMembersView && (
-              <section className="members-view-section">
-                <div className="members-view-header">
-                  <h2>Pod Members</h2>
-                  <button
-                      type="button"
-                      className="close-button"
-                      onClick={toggleMembersView}
-                  >
-                    ×
-                  </button>
-                </div>
-                <PodMembersList podId={activeGroup.id}/>
-              </section>
-          )}
         </>
     );
   }
@@ -1216,6 +1316,30 @@ export default function DashboardPage({ user, onLogout }) {
     }
   }
 
+  async function handleResetDatabaseClick() {
+    const confirmation = window.prompt(
+      "This will permanently clear all app data (users, memberships, posts, rituals, resume reviews). Type RESET DATABASE to continue.",
+      "",
+    );
+
+    if (confirmation === null) {
+      return;
+    }
+
+    setResetDbError("");
+    setResettingDb(true);
+
+    try {
+      await resetTestDatabase(confirmation);
+      window.alert("Database reset completed. You will now be signed out.");
+      await onLogout();
+    } catch (error) {
+      setResetDbError(error.message || "Failed to reset database.");
+    } finally {
+      setResettingDb(false);
+    }
+  }
+
   return (
       <main className="workspace-shell">
         <WorkspaceSidebar
@@ -1230,6 +1354,14 @@ export default function DashboardPage({ user, onLogout }) {
           <header className="workspace-topbar">
             <div className="status-chip">Workspace</div>
             <div style={{display: "flex", alignItems: "center", gap: "1rem"}}>
+              <button
+                  type="button"
+                  className="secondary-action danger-action"
+                  disabled={resettingDb}
+                  onClick={handleResetDatabaseClick}
+              >
+                {resettingDb ? "Resetting..." : "Reset Test DB"}
+              </button>
               <NotificationBell/>
               <div className="user-chip">
                 <AvatarBadge
@@ -1245,6 +1377,7 @@ export default function DashboardPage({ user, onLogout }) {
               </div>
             </div>
           </header>
+          {resetDbError && <p className="error-banner">{resetDbError}</p>}
 
           {activeSection === "groups" ? (
               <section className="content-shell groups-shell">{renderGroupsContent()}</section>
@@ -1259,8 +1392,7 @@ export default function DashboardPage({ user, onLogout }) {
                 user={user}
                 onComplete={() => {
                   setShowOnboardingModal(false);
-                  checkOnboardingStatus(activeGroup.id);
-                  loadGroupPosts(activeGroup.id);
+                  void openGroupFeature("feed", activeGroup.id);
                 }}
                 onClose={() => setShowOnboardingModal(false)}
             />

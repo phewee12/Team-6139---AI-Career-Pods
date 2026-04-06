@@ -15,6 +15,11 @@ export const config = {
   googleCallbackUrl:
     process.env.GOOGLE_CALLBACK_URL ||
     "http://localhost:4000/api/auth/google/callback",
+  supabaseUrl: process.env.SUPABASE_URL || "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
+  supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET || "resume-uploads",
+  enableTestDbReset: process.env.ENABLE_TEST_DB_RESET === "true",
+  testDbResetToken: process.env.TEST_DB_RESET_TOKEN || "",
 };
 
 export const isProd = config.nodeEnv === "production";

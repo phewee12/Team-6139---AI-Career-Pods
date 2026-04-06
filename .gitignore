@@ -8,5 +8,3 @@ backend/generated/
 frontend/dist/
 *.log
 .DS_Store
-local-pg.log
-local-pgdata/

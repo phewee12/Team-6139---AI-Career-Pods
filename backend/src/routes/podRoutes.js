@@ -2,6 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { config } from "../config.js";
+import { getSupabaseClient } from "../lib/supabase.js";
 import { toPublicUser } from "../utils/users.js";
 import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js";
 
@@ -35,6 +37,34 @@ const membershipDecisionSchema = z.object({
 
 const podPostCreateSchema = z.object({
   content: z.string().trim().min(1).max(2000),
+});
+
+const resumeReviewCreateSchema = z.object({
+  title: z.string().trim().min(2).max(120),
+  targetRole: z.string().trim().max(120).optional().or(z.literal("")),
+  context: z.string().trim().max(4000).optional().or(z.literal("")),
+});
+
+const resumeFileUploadSchema = z.object({
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.enum(["application/pdf"]),
+  contentBase64: z.string().min(1),
+});
+
+const resumeFeedbackSchema = z.object({
+  overallScore: z.number().int().min(1).max(5).optional(),
+  impactAndResultsScore: z.number().int().min(1).max(5).optional(),
+  roleFitScore: z.number().int().min(1).max(5).optional(),
+  atsClarityScore: z.number().int().min(1).max(5).optional(),
+  strengths: z.string().trim().min(1).max(4000),
+  improvements: z.string().trim().min(1).max(4000),
+  lineLevelSuggestions: z.string().trim().max(6000).optional().or(z.literal("")),
+  finalComments: z.string().trim().max(4000).optional().or(z.literal("")),
+  recommendation: z.enum(["STRONG_YES", "YES_WITH_EDITS", "NEEDS_MAJOR_REVISION"]).optional(),
+});
+
+const resumeStatusUpdateSchema = z.object({
+  status: z.enum(["CLOSED", "WITHDRAWN"]),
 });
 
 function toPodResponse(pod) {
@@ -156,6 +186,147 @@ async function getActiveMembership(podId, userId) {
       role: true,
     },
   });
+}
+
+async function getPodAccessContext(podId, userId) {
+  const pod = await prisma.pod.findUnique({
+    where: { id: podId },
+    select: {
+      id: true,
+      createdById: true,
+      memberships: {
+        where: {
+          userId,
+          status: "ACTIVE",
+        },
+        select: { id: true, role: true, status: true },
+        take: 1,
+      },
+    },
+  });
+
+  if (!pod) {
+    return { exists: false, isActiveMember: false, isAdmin: false };
+  }
+
+  const activeMembership = pod.memberships[0] || null;
+  const isActiveMember = Boolean(activeMembership);
+  const isAdmin = pod.createdById === userId || activeMembership?.role === "ADMIN";
+
+  return {
+    exists: true,
+    isActiveMember,
+    isAdmin,
+  };
+}
+
+async function getResumeRequestWithAccess(requestId, podId, userId) {
+  const request = await prisma.podResumeReviewRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      pod: true,
+      requester: true,
+      file: true,
+      feedback: {
+        include: {
+          reviewer: true,
+        },
+        orderBy: { submittedAt: "desc" },
+      },
+    },
+  });
+
+  if (!request || request.podId !== podId) {
+    return { exists: false, request: null, canView: false, canAdmin: false, isRequester: false };
+  }
+
+  const access = await getPodAccessContext(podId, userId);
+  const isRequester = request.requesterId === userId;
+
+  return {
+    exists: true,
+    request,
+    canView: access.isActiveMember,
+    canAdmin: access.isAdmin,
+    isRequester,
+  };
+}
+
+function toResumeReviewRequestResponse(reviewRequest, options = {}) {
+  const { includeFeedback = false, redactFeedback = false } = options;
+
+  return {
+    id: reviewRequest.id,
+    podId: reviewRequest.podId,
+    requesterId: reviewRequest.requesterId,
+    status: reviewRequest.status,
+    title: reviewRequest.title,
+    targetRole: reviewRequest.targetRole,
+    context: reviewRequest.context,
+    closedAt: reviewRequest.closedAt,
+    createdAt: reviewRequest.createdAt,
+    updatedAt: reviewRequest.updatedAt,
+    requester: toPublicUser(reviewRequest.requester),
+    file: reviewRequest.file
+      ? {
+          id: reviewRequest.file.id,
+          originalFileName: reviewRequest.file.originalFileName,
+          mimeType: reviewRequest.file.mimeType,
+          sizeBytes: reviewRequest.file.sizeBytes,
+          uploadedAt: reviewRequest.file.uploadedAt,
+        }
+      : null,
+    feedback: includeFeedback
+      ? reviewRequest.feedback.map((feedbackItem) => ({
+          id: feedbackItem.id,
+          requestId: feedbackItem.requestId,
+          reviewerId: feedbackItem.reviewerId,
+          overallScore: feedbackItem.overallScore,
+          impactAndResultsScore: feedbackItem.impactAndResultsScore,
+          roleFitScore: feedbackItem.roleFitScore,
+          atsClarityScore: feedbackItem.atsClarityScore,
+          strengths: feedbackItem.strengths,
+          improvements: feedbackItem.improvements,
+          lineLevelSuggestions: feedbackItem.lineLevelSuggestions,
+          finalComments: feedbackItem.finalComments,
+          recommendation: feedbackItem.recommendation,
+          submittedAt: feedbackItem.submittedAt,
+          updatedAt: feedbackItem.updatedAt,
+          reviewer: toPublicUser(feedbackItem.reviewer),
+        }))
+      : redactFeedback
+        ? []
+        : undefined,
+  };
+}
+
+function toResumeFeedbackResponse(feedback, includeReviewer = false) {
+  return {
+    id: feedback.id,
+    requestId: feedback.requestId,
+    reviewerId: feedback.reviewerId,
+    overallScore: feedback.overallScore,
+    impactAndResultsScore: feedback.impactAndResultsScore,
+    roleFitScore: feedback.roleFitScore,
+    atsClarityScore: feedback.atsClarityScore,
+    strengths: feedback.strengths,
+    improvements: feedback.improvements,
+    lineLevelSuggestions: feedback.lineLevelSuggestions,
+    finalComments: feedback.finalComments,
+    recommendation: feedback.recommendation,
+    submittedAt: feedback.submittedAt,
+    updatedAt: feedback.updatedAt,
+    reviewer: includeReviewer ? toPublicUser(feedback.reviewer) : undefined,
+  };
+}
+
+function sanitizeFileName(fileName) {
+  return fileName.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_");
+}
+
+function decodeBase64Pdf(contentBase64) {
+  const normalized = contentBase64.includes(",") ? contentBase64.split(",").pop() : contentBase64;
+  return Buffer.from(normalized, "base64");
 }
 
 router.get("/", requireAuth, async (request, response) => {
@@ -770,6 +941,340 @@ router.patch("/:podId/requests/:membershipId", requireAuth, async (request, resp
     }
 
     return response.status(500).json({ message: "Failed to process membership request." });
+  }
+});
+
+router.post("/:podId/resume-reviews", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const access = await getPodAccessContext(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "You must be an active member to create a resume review." });
+    }
+
+    const payload = resumeReviewCreateSchema.parse(request.body);
+
+    const reviewRequest = await prisma.podResumeReviewRequest.create({
+      data: {
+        podId,
+        requesterId: request.user.id,
+        title: payload.title,
+        targetRole: payload.targetRole || null,
+        context: payload.context || null,
+      },
+      include: {
+        requester: true,
+        file: true,
+        feedback: { include: { reviewer: true } },
+      },
+    });
+
+    return response.status(201).json({ reviewRequest: toResumeReviewRequestResponse(reviewRequest) });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid resume review payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to create resume review request." });
+  }
+});
+
+router.post("/:podId/resume-reviews/:requestId/file", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.isRequester) {
+      return response.status(403).json({ message: "Only the requester can upload the resume file." });
+    }
+
+    const payload = resumeFileUploadSchema.parse(request.body);
+    const fileBuffer = decodeBase64Pdf(payload.contentBase64);
+
+    if (fileBuffer.length === 0) {
+      return response.status(400).json({ message: "Resume file is empty." });
+    }
+
+    const maxFileSizeBytes = 10 * 1024 * 1024;
+    if (fileBuffer.length > maxFileSizeBytes) {
+      return response.status(400).json({ message: "Resume file must be 10MB or smaller." });
+    }
+
+    const supabase = getSupabaseClient();
+    const fileName = sanitizeFileName(payload.fileName || "resume.pdf");
+    const storageBucket = config.supabaseStorageBucket;
+    const storagePath = `${podId}/${requestId}/${request.user.id}/${Date.now()}-${fileName}`;
+
+    const uploadResult = await supabase.storage.from(storageBucket).upload(storagePath, fileBuffer, {
+      contentType: payload.mimeType,
+      upsert: true,
+    });
+
+    if (uploadResult.error) {
+      return response.status(500).json({ message: uploadResult.error.message || "Failed to upload resume file." });
+    }
+
+    const fileRecord = await prisma.podResumeFile.upsert({
+      where: { requestId },
+      update: {
+        uploadedById: request.user.id,
+        storageBucket,
+        storagePath,
+        originalFileName: payload.fileName,
+        mimeType: payload.mimeType,
+        sizeBytes: fileBuffer.length,
+      },
+      create: {
+        requestId,
+        uploadedById: request.user.id,
+        storageBucket,
+        storagePath,
+        originalFileName: payload.fileName,
+        mimeType: payload.mimeType,
+        sizeBytes: fileBuffer.length,
+      },
+    });
+
+    return response.status(200).json({
+      file: {
+        id: fileRecord.id,
+        requestId: fileRecord.requestId,
+        storageBucket: fileRecord.storageBucket,
+        storagePath: fileRecord.storagePath,
+        originalFileName: fileRecord.originalFileName,
+        mimeType: fileRecord.mimeType,
+        sizeBytes: fileRecord.sizeBytes,
+        uploadedAt: fileRecord.uploadedAt,
+      },
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid resume file payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to upload resume file." });
+  }
+});
+
+router.get("/:podId/resume-reviews", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const access = await getPodAccessContext(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const reviewRequests = await prisma.podResumeReviewRequest.findMany({
+      where: { podId },
+      include: {
+        requester: true,
+        file: true,
+        feedback: {
+          include: { reviewer: true },
+          orderBy: { submittedAt: "desc" },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }],
+    });
+
+    return response.status(200).json({
+      reviewRequests: reviewRequests.map((reviewRequest) =>
+        toResumeReviewRequestResponse(reviewRequest, {
+          redactFeedback: !access.isAdmin && reviewRequest.requesterId !== request.user.id,
+        }),
+      ),
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load resume review requests." });
+  }
+});
+
+router.get("/:podId/resume-reviews/:requestId", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.canView) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    return response.status(200).json({
+      reviewRequest: toResumeReviewRequestResponse(access.request, {
+        includeFeedback: access.isRequester || access.canAdmin,
+        redactFeedback: !access.isRequester && !access.canAdmin,
+      }),
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load resume review request." });
+  }
+});
+
+router.post("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.canView) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    if (access.request.requesterId === request.user.id) {
+      return response.status(403).json({ message: "You cannot review your own resume." });
+    }
+
+    const membership = await getActiveMembership(podId, request.user.id);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const payload = resumeFeedbackSchema.parse(request.body);
+
+    const feedback = await prisma.podResumeReviewFeedback.upsert({
+      where: {
+        requestId_reviewerId: {
+          requestId,
+          reviewerId: request.user.id,
+        },
+      },
+      update: {
+        overallScore: payload.overallScore ?? null,
+        impactAndResultsScore: payload.impactAndResultsScore ?? null,
+        roleFitScore: payload.roleFitScore ?? null,
+        atsClarityScore: payload.atsClarityScore ?? null,
+        strengths: payload.strengths.trim(),
+        improvements: payload.improvements.trim(),
+        lineLevelSuggestions: payload.lineLevelSuggestions?.trim() || null,
+        finalComments: payload.finalComments?.trim() || null,
+        recommendation: payload.recommendation || null,
+      },
+      create: {
+        requestId,
+        reviewerId: request.user.id,
+        overallScore: payload.overallScore ?? null,
+        impactAndResultsScore: payload.impactAndResultsScore ?? null,
+        roleFitScore: payload.roleFitScore ?? null,
+        atsClarityScore: payload.atsClarityScore ?? null,
+        strengths: payload.strengths.trim(),
+        improvements: payload.improvements.trim(),
+        lineLevelSuggestions: payload.lineLevelSuggestions?.trim() || null,
+        finalComments: payload.finalComments?.trim() || null,
+        recommendation: payload.recommendation || null,
+      },
+      include: { reviewer: true },
+    });
+
+    return response.status(200).json({ feedback: toResumeFeedbackResponse(feedback, true) });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid feedback payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to submit feedback." });
+  }
+});
+
+router.get("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.isRequester && !access.canAdmin) {
+      return response.status(403).json({ message: "Only the requester or pod admins can view feedback." });
+    }
+
+    return response.status(200).json({
+      feedback: access.request.feedback.map((feedbackItem) => toResumeFeedbackResponse(feedbackItem, true)),
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load feedback." });
+  }
+});
+
+router.get("/:podId/resume-reviews/:requestId/my-feedback", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    const feedback = access.request.feedback.find((entry) => entry.reviewerId === request.user.id);
+    if (!feedback) {
+      return response.status(404).json({ message: "Your feedback was not found." });
+    }
+
+    return response.status(200).json({ feedback: toResumeFeedbackResponse(feedback, true) });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load your feedback." });
+  }
+});
+
+router.patch("/:podId/resume-reviews/:requestId/status", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.isRequester && !access.canAdmin) {
+      return response.status(403).json({ message: "Only the requester or pod admins can update status." });
+    }
+
+    const payload = resumeStatusUpdateSchema.parse(request.body);
+
+    const updated = await prisma.podResumeReviewRequest.update({
+      where: { id: requestId },
+      data: {
+        status: payload.status,
+        closedAt: payload.status === "CLOSED" || payload.status === "WITHDRAWN" ? new Date() : null,
+      },
+      include: {
+        requester: true,
+        file: true,
+        feedback: { include: { reviewer: true } },
+      },
+    });
+
+    return response.status(200).json({
+      reviewRequest: toResumeReviewRequestResponse(updated, {
+        includeFeedback: access.isRequester || access.canAdmin,
+      }),
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid status payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to update resume review status." });
   }
 });
 

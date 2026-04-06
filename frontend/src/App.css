@@ -407,6 +407,12 @@ button {
   padding: 1.8rem;
   display: grid;
   gap: 1.45rem;
+  align-content: start;
+}
+
+.groups-shell {
+  width: min(1120px, 100%);
+  justify-self: center;
 }
 
 .tab-strip {
@@ -414,6 +420,7 @@ button {
   gap: 0.9rem;
   border-bottom: 1px solid var(--line);
   padding-bottom: 1rem;
+  flex-wrap: wrap;
 }
 
 .tab,
@@ -421,6 +428,13 @@ button {
   background: var(--lavender-mist);
   border: 1px solid var(--line);
   color: var(--ink);
+}
+
+.tab {
+  padding: 0.55rem 0.9rem;
+  min-height: 2.5rem;
+  border-radius: 0.8rem;
+  font-size: 0.95rem;
 }
 
 .tab.active {
@@ -476,7 +490,14 @@ button {
   font-size: 0.94rem;
 }
 
-.group-grid,
+.group-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-content: stretch;
+  align-items: start;
+  gap: 1rem;
+}
+
 .placeholder-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -676,6 +697,7 @@ button {
 .group-detail-grid {
   grid-template-columns: minmax(0, 2.2fr) minmax(16rem, 1fr);
   align-items: start;
+  align-content: start;
 }
 
 .group-detail-left,
@@ -794,6 +816,7 @@ button {
 .feed-layout {
   grid-template-columns: minmax(0, 2.2fr) minmax(16rem, 1fr);
   align-items: start;
+  align-content: start;
 }
 
 .feed-sidebar-column {
@@ -875,6 +898,33 @@ button {
   color: var(--ink);
   padding: 0.4rem 0.65rem;
   font-weight: 600;
+}
+
+.feature-nav-card .feature-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.feature-nav-card .feature-pill {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.feature-page-header {
+  margin-bottom: 0.85rem;
+}
+
+.feature-page-header h2 {
+  margin: 0 0 0.35rem;
+}
+
+.feature-page-header p {
+  margin: 0;
 }
 
 .feed-tag.active,

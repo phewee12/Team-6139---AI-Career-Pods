@@ -4,6 +4,7 @@ import express from "express";
 import passport from "passport";
 import { configureGooglePassport } from "./auth/googleStrategy.js";
 import { config } from "./config.js";
+import { adminRoutes } from "./routes/adminRoutes.js";
 import { authRoutes } from "./routes/authRoutes.js";
 import { podRoutes } from "./routes/podRoutes.js";
 import { userRoutes } from "./routes/userRoutes.js";
@@ -29,6 +30,7 @@ app.get("/api/health", (_request, response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/pods", podRoutes);
+app.use("/api/admin", adminRoutes);
 
 app.use((error, _request, response, _next) => {
   console.error(error);

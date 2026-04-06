@@ -1,11 +1,46 @@
 import bcrypt from "bcrypt";
 import request from "supertest";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockUpload, setUploadError, resetUploadMock } = vi.hoisted(() => {
+  let uploadError = null;
+
+  const uploadMock = vi.fn(async () => ({
+    data: { path: "mock/path/resume.pdf" },
+    error: uploadError,
+  }));
+
+  return {
+    mockUpload: uploadMock,
+    setUploadError: (value) => {
+      uploadError = value;
+    },
+    resetUploadMock: () => {
+      uploadError = null;
+      uploadMock.mockClear();
+    },
+  };
+});
+
+vi.mock("../src/lib/supabase.js", () => ({
+  getSupabaseClient: () => ({
+    storage: {
+      from: () => ({
+        upload: mockUpload,
+      }),
+    },
+  }),
+}));
+
 import { app } from "../src/app.js";
 import { config } from "../src/config.js";
 import { prisma } from "../src/lib/prisma.js";
 
 beforeEach(async () => {
+  resetUploadMock();
+  await prisma.podResumeReviewFeedback.deleteMany();
+  await prisma.podResumeFile.deleteMany();
+  await prisma.podResumeReviewRequest.deleteMany();
   await prisma.podPost.deleteMany();
   await prisma.podMembership.deleteMany();
   await prisma.pod.deleteMany({
@@ -15,6 +50,9 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await prisma.podResumeReviewFeedback.deleteMany();
+  await prisma.podResumeFile.deleteMany();
+  await prisma.podResumeReviewRequest.deleteMany();
   await prisma.podPost.deleteMany();
   await prisma.podMembership.deleteMany();
   await prisma.pod.deleteMany({
@@ -30,6 +68,25 @@ describe("Health Endpoint", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: "ok" });
+  });
+});
+
+describe("Admin Endpoints", () => {
+  it("blocks test DB reset when feature flag is disabled", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Admin Guard User",
+      email: "admin-guard@example.com",
+      password: "Password123",
+    });
+
+    const cookie = registration.headers["set-cookie"];
+
+    const response = await request(app)
+      .post("/api/admin/test/reset-db")
+      .set("Cookie", cookie)
+      .send({ confirmText: "RESET DATABASE" });
+
+    expect(response.status).toBe(403);
   });
 });
 
@@ -662,5 +719,366 @@ describe("Pod Endpoints", () => {
     expect(postsResponse.body.posts.length).toBeGreaterThan(0);
     expect(postsResponse.body.posts[0].content).toContain("Onboarding Member joined the pod. Intro:");
     expect(postsResponse.body.posts[0].content).toContain(introMessage);
+  });
+
+  it("creates and lists resume review requests for active members", async () => {
+    const requesterRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Resume Requester",
+      email: "resume-requester@example.com",
+      password: "Password123",
+    });
+    const requesterCookie = requesterRegistration.headers["set-cookie"];
+
+    const reviewerRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Resume Reviewer",
+      email: "resume-reviewer@example.com",
+      password: "Password123",
+    });
+    const reviewerCookie = reviewerRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+
+    const createResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", requesterCookie)
+      .send({
+        title: "SWE Internship Resume",
+        targetRole: "Software Engineer Intern",
+        context: "Preparing for fall internship applications.",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.reviewRequest.title).toBe("SWE Internship Resume");
+    expect(createResponse.body.reviewRequest.requester.email).toBe("resume-requester@example.com");
+
+    const reviewerListResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", reviewerCookie);
+
+    expect(reviewerListResponse.status).toBe(200);
+    expect(reviewerListResponse.body.reviewRequests.length).toBe(1);
+    expect(reviewerListResponse.body.reviewRequests[0].feedback).toEqual([]);
+  });
+
+  it("rejects self-review, allows peer feedback, and lets requester fetch feedback", async () => {
+    const requesterRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Feedback Requester",
+      email: "feedback-requester@example.com",
+      password: "Password123",
+    });
+    const requesterCookie = requesterRegistration.headers["set-cookie"];
+
+    const reviewerRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Feedback Reviewer",
+      email: "feedback-reviewer@example.com",
+      password: "Password123",
+    });
+    const reviewerCookie = reviewerRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+
+    const reviewRequestResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", requesterCookie)
+      .send({ title: "Backend Engineer Resume" });
+
+    const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
+
+    const selfFeedbackResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/feedback`)
+      .set("Cookie", requesterCookie)
+      .send({
+        strengths: "Strong technical projects.",
+        improvements: "Could add more metrics.",
+      });
+
+    expect(selfFeedbackResponse.status).toBe(403);
+
+    const reviewerFeedbackResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/feedback`)
+      .set("Cookie", reviewerCookie)
+      .send({
+        overallScore: 4,
+        strengths: "Clear project bullets.",
+        improvements: "Add quantified impact where possible.",
+        recommendation: "YES_WITH_EDITS",
+      });
+
+    expect(reviewerFeedbackResponse.status).toBe(200);
+    expect(reviewerFeedbackResponse.body.feedback.reviewer.email).toBe("feedback-reviewer@example.com");
+    expect(reviewerFeedbackResponse.body.feedback.recommendation).toBe("YES_WITH_EDITS");
+
+    const requesterFeedbackView = await request(app)
+      .get(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/feedback`)
+      .set("Cookie", requesterCookie);
+
+    expect(requesterFeedbackView.status).toBe(200);
+    expect(requesterFeedbackView.body.feedback.length).toBe(1);
+    expect(requesterFeedbackView.body.feedback[0].reviewer.email).toBe("feedback-reviewer@example.com");
+  }, 15000);
+
+  it("allows requester to close a resume review request", async () => {
+    const requesterRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Status Requester",
+      email: "status-requester@example.com",
+      password: "Password123",
+    });
+    const requesterCookie = requesterRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+
+    const reviewRequestResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", requesterCookie)
+      .send({ title: "Data Analyst Resume" });
+
+    const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
+
+    const closeResponse = await request(app)
+      .patch(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/status`)
+      .set("Cookie", requesterCookie)
+      .send({ status: "CLOSED" });
+
+    expect(closeResponse.status).toBe(200);
+    expect(closeResponse.body.reviewRequest.status).toBe("CLOSED");
+    expect(closeResponse.body.reviewRequest.closedAt).toBeTruthy();
+  });
+
+  it("uploads a resume PDF file for a review request", async () => {
+    setUploadError(null);
+
+    const requesterRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Upload Requester",
+      email: "upload-requester@example.com",
+      password: "Password123",
+    });
+    const requesterCookie = requesterRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+
+    const reviewRequestResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", requesterCookie)
+      .send({ title: "Upload Ready Resume" });
+
+    const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
+
+    const uploadResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/file`)
+      .set("Cookie", requesterCookie)
+      .send({
+        fileName: "resume.pdf",
+        mimeType: "application/pdf",
+        contentBase64: "JVBERi0xLjQKJQ==",
+      });
+
+    expect(uploadResponse.status).toBe(200);
+    expect(uploadResponse.body.file.requestId).toBe(reviewRequestId);
+    expect(uploadResponse.body.file.mimeType).toBe("application/pdf");
+    expect(uploadResponse.body.file.sizeBytes).toBeGreaterThan(0);
+    expect(mockUpload).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the current user's submitted feedback via my-feedback endpoint", async () => {
+    const requesterRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "My Feedback Requester",
+      email: "my-feedback-requester@example.com",
+      password: "Password123",
+    });
+    const requesterCookie = requesterRegistration.headers["set-cookie"];
+
+    const reviewerRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "My Feedback Reviewer",
+      email: "my-feedback-reviewer@example.com",
+      password: "Password123",
+    });
+    const reviewerCookie = reviewerRegistration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+
+    const reviewRequestResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews`)
+      .set("Cookie", requesterCookie)
+      .send({ title: "My Feedback Resume" });
+
+    const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
+
+    await request(app)
+      .post(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/feedback`)
+      .set("Cookie", reviewerCookie)
+      .send({
+        strengths: "Solid formatting and structure.",
+        improvements: "Add quantified outcomes to top bullets.",
+      });
+
+    const myFeedbackResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/my-feedback`)
+      .set("Cookie", reviewerCookie);
+
+    expect(myFeedbackResponse.status).toBe(200);
+    expect(myFeedbackResponse.body.feedback.reviewer.email).toBe("my-feedback-reviewer@example.com");
+    expect(myFeedbackResponse.body.feedback.strengths).toContain("Solid formatting");
+  });
+
+  it("supports core bi-weekly ritual endpoints", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Ritual Member",
+      email: "ritual-member@example.com",
+      password: "Password123",
+    });
+    const cookie = registration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+
+    const currentResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/checkin/current`)
+      .set("Cookie", cookie);
+
+    expect(currentResponse.status).toBe(200);
+    expect(currentResponse.body).toHaveProperty("isActive");
+
+    const checkInResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/checkin`)
+      .set("Cookie", cookie)
+      .send({ notes: "Completed mock applications.", goals: "Refine interview stories." });
+
+    expect(checkInResponse.status).toBe(200);
+    expect(checkInResponse.body.checkIn.status).toBe("COMPLETED");
+
+    const reflectionResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/reflection`)
+      .set("Cookie", cookie)
+      .send({ content: "Great momentum this week and clearer focus areas." });
+
+    expect(reflectionResponse.status).toBe(200);
+    expect(reflectionResponse.body.reflection.content).toContain("Great momentum");
+
+    const celebrationResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/celebrations`)
+      .set("Cookie", cookie)
+      .send({ title: "Interview Invite", description: "Received a callback from a target company." });
+
+    expect(celebrationResponse.status).toBe(201);
+    expect(celebrationResponse.body.celebration.title).toBe("Interview Invite");
+
+    const checkInsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/checkins`)
+      .set("Cookie", cookie);
+
+    expect(checkInsResponse.status).toBe(200);
+    expect(checkInsResponse.body.checkIns.length).toBeGreaterThanOrEqual(1);
+
+    const reflectionsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/reflections`)
+      .set("Cookie", cookie);
+
+    expect(reflectionsResponse.status).toBe(200);
+    expect(reflectionsResponse.body.reflections.length).toBeGreaterThanOrEqual(1);
+
+    const celebrationsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/celebrations/all`)
+      .set("Cookie", cookie);
+
+    expect(celebrationsResponse.status).toBe(200);
+    expect(celebrationsResponse.body.celebrations.length).toBeGreaterThanOrEqual(1);
+
+    const phaseResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/phase`)
+      .set("Cookie", cookie);
+
+    expect(phaseResponse.status).toBe(200);
+    expect(phaseResponse.body).toHaveProperty("phase");
+    expect(phaseResponse.body).toHaveProperty("prompt");
+
+    const statsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/stats`)
+      .set("Cookie", cookie);
+
+    expect(statsResponse.status).toBe(200);
+    expect(statsResponse.body.currentWeek.total_checkins).toBeGreaterThanOrEqual(1);
+  });
+
+  it("lists notifications and marks one as read", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Notification Member",
+      email: "notification-member@example.com",
+      password: "Password123",
+    });
+    const cookie = registration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    const user = await prisma.user.findUnique({
+      where: { email: "notification-member@example.com" },
+      select: { id: true },
+    });
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId: user.id,
+        podId: publicPod.id,
+        type: "PHASE_REMINDER",
+        title: "Ritual Reminder",
+        message: "Submit your check-in today.",
+        scheduledAt: new Date(),
+        sentAt: new Date(),
+      },
+    });
+
+    const listResponse = await request(app).get("/api/pods/notifications").set("Cookie", cookie);
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.notifications.some((item) => item.id === notification.id)).toBe(true);
+
+    const markReadResponse = await request(app)
+      .patch(`/api/pods/notifications/${notification.id}/read`)
+      .set("Cookie", cookie);
+
+    expect(markReadResponse.status).toBe(200);
+
+    const updatedNotification = await prisma.notification.findUnique({
+      where: { id: notification.id },
+      select: { readAt: true },
+    });
+    expect(updatedNotification.readAt).toBeTruthy();
+  });
+
+  it("returns detailed pod payload for a valid pod id", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Pod Detail Member",
+      email: "pod-detail-member@example.com",
+      password: "Password123",
+    });
+    const cookie = registration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    const detailResponse = await request(app).get(`/api/pods/${publicPod.id}`).set("Cookie", cookie);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.pod.id).toBe(publicPod.id);
+    expect(detailResponse.body.pod).toHaveProperty("memberCount");
   });
 });

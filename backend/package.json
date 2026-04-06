@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "job": "node src/jobs/phaseTransitionJob.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
@@ -14,6 +15,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
+    "@supabase/supabase-js": "^2.101.1",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -30,9 +32,5 @@
     "prisma": "^6.19.2",
     "supertest": "^7.1.4",
     "vitest": "^4.1.0"
-  },
-  "scripts": {
-    "dev": "nodemon src/server.js",
-    "job": "node src/jobs/phaseTransitionJob.js"
   }
 }
