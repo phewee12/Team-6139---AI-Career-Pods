@@ -30,5 +30,9 @@
     "prisma": "^6.19.2",
     "supertest": "^7.1.4",
     "vitest": "^4.1.0"
+  },
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "job": "node src/jobs/phaseTransitionJob.js"
   }
 }

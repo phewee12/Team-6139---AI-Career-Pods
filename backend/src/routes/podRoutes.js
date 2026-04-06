@@ -3,8 +3,24 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { toPublicUser } from "../utils/users.js";
+import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js";
 
 const router = Router();
+
+
+function getBiWeeklyStartDate(date) {
+  const d = new Date(date);
+  const daysSinceEpoch = Math.floor(d.getTime() / (1000 * 60 * 60 * 24));
+  const biWeeklyOffset = daysSinceEpoch % 14;
+  d.setDate(d.getDate() - biWeeklyOffset);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function isBiWeeklyActive(currentDate, weekStartDate) {
+  const daysSinceStart = Math.floor((currentDate - weekStartDate) / (1000 * 60 * 60 * 24));
+  return daysSinceStart < 14;
+}
 
 const podCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -231,42 +247,8 @@ router.post("/", requireAuth, async (request, response) => {
   }
 });
 
-router.get("/:podId", requireAuth, async (request, response) => {
-  try {
-    const pod = await prisma.pod.findUnique({
-      where: { id: request.params.podId },
-      include: {
-        memberships: {
-          where: { userId: request.user.id },
-          select: {
-            role: true,
-            status: true,
-          },
-          take: 1,
-        },
-        _count: {
-          select: {
-            memberships: {
-              where: { status: "ACTIVE" },
-            },
-          },
-        },
-      },
-    });
-
-    if (!pod) {
-      return response.status(404).json({ message: "Pod not found." });
-    }
-
-    return response.status(200).json({ pod: toPodResponse(pod) });
-  } catch {
-    return response.status(500).json({ message: "Failed to load pod." });
-  }
-});
-
 //USER STORY 3: Pod Onboarding Routes
 
-// Get pod onboarding status
 router.get("/:podId/onboarding", requireAuth, async (request, response) => {
   try {
     const { podId } = request.params;
@@ -300,7 +282,6 @@ router.get("/:podId/onboarding", requireAuth, async (request, response) => {
   }
 });
 
-// Complete pod onboarding
 router.post("/:podId/onboarding", requireAuth, async (request, response) => {
   try {
     const { podId } = request.params;
@@ -331,7 +312,6 @@ router.post("/:podId/onboarding", requireAuth, async (request, response) => {
     const userLabel = request.user.fullName?.trim() || request.user.email;
     const onboardingFeedMessage = `${userLabel} joined the pod. Intro: ${trimmedIntroMessage}`;
 
-    // Persist onboarding completion and publish an intro message to the pod feed.
     const updated = await prisma.$transaction(async (transaction) => {
       const updatedMembership = await transaction.podMembership.update({
         where: { id: membership.id },
@@ -363,12 +343,10 @@ router.post("/:podId/onboarding", requireAuth, async (request, response) => {
 
 //USER STORY 4: Pod Members Routes
 
-// Get all members of a pod
 router.get("/:podId/members", requireAuth, async (request, response) => {
   try {
     const { podId } = request.params;
 
-    // Check if user has access to this pod
     const membership = await prisma.podMembership.findUnique({
       where: {
         podId_userId: {
@@ -391,7 +369,7 @@ router.get("/:podId/members", requireAuth, async (request, response) => {
         user: true,
       },
       orderBy: [
-        { role: "desc" }, // ADMINS first
+        { role: "desc" },
         { joinedAt: "asc" },
       ],
     });
@@ -410,7 +388,6 @@ router.get("/:podId/members", requireAuth, async (request, response) => {
   }
 });
 
-// Get user's pods (for "My Pods" view)
 router.get("/user/mypods", requireAuth, async (request, response) => {
   try {
     const memberships = await prisma.podMembership.findMany({
@@ -793,6 +770,335 @@ router.patch("/:podId/requests/:membershipId", requireAuth, async (request, resp
     }
 
     return response.status(500).json({ message: "Failed to process membership request." });
+  }
+});
+
+router.get("/:podId/checkin/current", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const today = new Date();
+    const weekStartDate = getBiWeeklyStartDate(today);
+
+    let checkIn = null;
+    let reflection = null;
+    let celebrations = [];
+
+    try {
+      checkIn = await prisma.podCheckIn.findUnique({
+        where: {
+          podId_userId_weekStartDate: {
+            podId,
+            userId: request.user.id,
+            weekStartDate,
+          },
+        },
+      });
+    } catch (err) {
+      console.log("No check-in for this period");
+    }
+
+    try {
+      reflection = await prisma.podReflection.findUnique({
+        where: {
+          podId_userId_weekStartDate: {
+            podId,
+            userId: request.user.id,
+            weekStartDate,
+          },
+        },
+      });
+    } catch (err) {
+      console.log("No reflection for this period");
+    }
+
+    try {
+      celebrations = await prisma.podCelebration.findMany({
+        where: { podId, weekStartDate },
+        include: { user: true },
+      });
+    } catch (err) {
+      console.log("No celebrations for this period");
+    }
+
+    return response.status(200).json({
+      weekStartDate,
+      checkIn,
+      reflection,
+      celebrations,
+      isActive: true,
+    });
+  } catch (error) {
+    console.error("Error in /checkin/current:", error);
+    return response.status(200).json({
+      weekStartDate: new Date(),
+      checkIn: null,
+      reflection: null,
+      celebrations: [],
+      isActive: true,
+    });
+  }
+});
+
+router.post("/:podId/checkin", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const { notes, goals } = request.body;
+
+    if (!notes?.trim() && !goals?.trim()) {
+      return response.status(400).json({ message: "Notes or goals are required." });
+    }
+
+    const weekStartDate = getBiWeeklyStartDate(new Date());
+
+    const checkIn = await prisma.podCheckIn.upsert({
+      where: {
+        podId_userId_weekStartDate: {
+          podId,
+          userId: request.user.id,
+          weekStartDate,
+        },
+      },
+      update: {
+        notes: notes?.trim() || null,
+        goals: goals?.trim() || null,
+        status: "COMPLETED",
+        updatedAt: new Date(),
+      },
+      create: {
+        podId,
+        userId: request.user.id,
+        weekStartDate,
+        notes: notes?.trim() || null,
+        goals: goals?.trim() || null,
+        status: "COMPLETED",
+      },
+    });
+
+    return response.status(200).json({ checkIn });
+  } catch (error) {
+    console.error("Error saving check-in:", error);
+    return response.status(500).json({ message: "Failed to save check-in." });
+  }
+});
+
+router.post("/:podId/reflection", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const { content } = request.body;
+
+    if (!content?.trim()) {
+      return response.status(400).json({ message: "Reflection content is required." });
+    }
+
+    const weekStartDate = getBiWeeklyStartDate(new Date());
+
+    await prisma.podReflection.deleteMany({
+      where: { podId, userId: request.user.id, weekStartDate },
+    });
+
+    const reflection = await prisma.podReflection.create({
+      data: {
+        podId,
+        userId: request.user.id,
+        weekStartDate,
+        content: content.trim(),
+      },
+    });
+
+    return response.status(200).json({ reflection });
+  } catch (error) {
+    console.error("Error saving reflection:", error);
+    return response.status(500).json({ message: "Failed to save reflection." });
+  }
+});
+
+router.post("/:podId/celebrations", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const { title, description } = request.body;
+
+    if (!title?.trim()) {
+      return response.status(400).json({ message: "Celebration title is required." });
+    }
+
+    const weekStartDate = getBiWeeklyStartDate(new Date());
+
+    const celebration = await prisma.podCelebration.create({
+      data: {
+        podId,
+        userId: request.user.id,
+        weekStartDate,
+        title: title.trim(),
+        description: description?.trim() || "",
+      },
+    });
+
+    return response.status(201).json({ celebration });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to add celebration." });
+  }
+});
+
+router.get("/:podId/celebrations/all", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const celebrations = await prisma.podCelebration.findMany({
+      where: { podId },
+      include: { user: true },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+    return response.status(200).json({ celebrations });
+  } catch (error) {
+    console.error("Error loading celebrations:", error);
+    return response.status(500).json({ message: "Failed to load celebrations." });
+  }
+});
+
+router.get("/:podId/checkins", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const weekStartDate = getBiWeeklyStartDate(new Date());
+
+    const checkIns = await prisma.podCheckIn.findMany({
+      where: { podId, weekStartDate },
+      include: { user: true },
+    });
+
+    const reflections = await prisma.podReflection.findMany({
+      where: { podId, weekStartDate },
+      include: { user: true },
+    });
+
+    const memberData = checkIns.map(checkIn => ({
+      ...checkIn,
+      reflection: reflections.find(r => r.userId === checkIn.userId) || null,
+    }));
+
+    return response.status(200).json({ checkIns: memberData });
+  } catch (error) {
+    console.error("Error loading check-ins:", error);
+    return response.status(500).json({ message: "Failed to load check-ins." });
+  }
+});
+
+router.get("/:podId/reflections", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const weekStartDate = getBiWeeklyStartDate(new Date());
+
+    const reflections = await prisma.podReflection.findMany({
+      where: { podId, weekStartDate },
+      include: { user: true },
+    });
+
+    return response.status(200).json({ reflections });
+  } catch (error) {
+    console.error("Error loading reflections:", error);
+    return response.status(500).json({ message: "Failed to load reflections." });
+  }
+});
+
+router.get("/:podId/phase", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const phase = await getCurrentPhase(podId);
+    const prompt = await getPromptForPhase(podId, request.user.id, phase.currentPhase);
+
+    response.status(200).json({
+      phase: phase.currentPhase,
+      phaseStartedAt: phase.phaseStartedAt,
+      nextPhaseAt: phase.nextPhaseAt,
+      prompt,
+    });
+  } catch (error) {
+    console.error("Error in /phase:", error);
+    response.status(200).json({
+      phase: "MONDAY_SET",
+      phaseStartedAt: new Date(),
+      nextPhaseAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      prompt: {
+        title: "Set Your Weekly Goals",
+        questions: ["What are your top 3 goals for this week?"],
+        placeholder: "This week, I will accomplish...",
+      },
+    });
+  }
+});
+
+router.get("/:podId/stats", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+
+    const checkinCount = await prisma.podCheckIn.count({ where: { podId } });
+    const reflectionCount = await prisma.podReflection.count({ where: { podId } });
+    const celebrationCount = await prisma.podCelebration.count({ where: { podId } });
+
+    response.status(200).json({
+      historicalStats: [],
+      currentWeek: {
+        active_members: 1,
+        total_checkins: checkinCount,
+        total_reflections: reflectionCount,
+        total_celebrations: celebrationCount,
+        completion_rate: checkinCount > 0 ? 100 : 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error in /stats:", error);
+    response.status(500).json({ message: "Failed to load stats." });
+  }
+});
+
+router.get("/notifications", requireAuth, async (request, response) => {
+  try {
+    const notifications = await prisma.notification.findMany({
+      where: { userId: request.user.id, sentAt: { not: null } },
+      orderBy: { scheduledAt: "desc" },
+      take: 20,
+    });
+    response.status(200).json({ notifications: notifications || [] });
+  } catch (error) {
+    console.error("Error loading notifications:", error);
+    response.status(500).json({ message: "Failed to load notifications." });
+  }
+});
+
+router.patch("/notifications/:notificationId/read", requireAuth, async (request, response) => {
+  try {
+    await prisma.notification.update({
+      where: { id: request.params.notificationId },
+      data: { readAt: new Date() },
+    });
+    response.status(200).json({ message: "Notification marked as read." });
+  } catch (error) {
+    response.status(500).json({ message: "Failed to update notification." });
+  }
+});
+
+router.get("/:podId", requireAuth, async (request, response) => {
+  try {
+    const pod = await prisma.pod.findUnique({
+      where: { id: request.params.podId },
+      include: {
+        memberships: {
+          where: { userId: request.user.id },
+          select: { role: true, status: true },
+          take: 1,
+        },
+        _count: {
+          select: { memberships: { where: { status: "ACTIVE" } } },
+        },
+      },
+    });
+
+    if (!pod) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    return response.status(200).json({ pod: toPodResponse(pod) });
+  } catch {
+    return response.status(500).json({ message: "Failed to load pod." });
   }
 });
 
