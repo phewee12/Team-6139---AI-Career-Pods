@@ -402,6 +402,81 @@ button {
   border-radius: inherit;
 }
 
+.resume-request-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.resume-request-item {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-alt);
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.resume-request-item.active {
+  border-color: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+  background: var(--surface);
+}
+
+.resume-request-title {
+  font-weight: 700;
+}
+
+.resume-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.resume-badge,
+.resume-status {
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0.32rem 0.48rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.resume-badge.neutral {
+  background: rgba(57, 41, 77, 0.08);
+  color: var(--muted);
+}
+
+.resume-badge.ready {
+  background: rgba(34, 139, 64, 0.12);
+  color: #1f7a38;
+}
+
+.resume-badge.missing {
+  background: rgba(190, 32, 32, 0.12);
+  color: #9f2121;
+}
+
+.resume-badge.reviewed {
+  background: rgba(34, 139, 64, 0.12);
+  color: #1f7a38;
+}
+
+.resume-badge.pending-review {
+  background: rgba(245, 160, 0, 0.18);
+  color: #8a5a00;
+}
+
+.resume-status.open {
+  background: rgba(34, 139, 64, 0.12);
+  color: #1f7a38;
+}
+
+.resume-status.closed {
+  background: rgba(57, 41, 77, 0.12);
+  color: var(--muted);
+}
+
 .content-shell {
   min-width: 0;
   padding: 1.8rem;

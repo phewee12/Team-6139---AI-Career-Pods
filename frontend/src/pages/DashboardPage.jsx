@@ -1075,17 +1075,11 @@ export default function DashboardPage({ user, onLogout }) {
 
       if (activeGroupFeature === "resume") {
         return (
-          <article className="detail-card">
-            <header className="feature-page-header">
-              <h2>Resume Review</h2>
-              <p className="helper-copy">Request and review resumes with structured feedback.</p>
-            </header>
-            <ResumeReviewPanel
-              podId={activeGroup.id}
-              user={user}
-              isAdmin={activeGroup.membershipRole === "ADMIN"}
-            />
-          </article>
+          <ResumeReviewPanel
+            podId={activeGroup.id}
+            user={user}
+            isAdmin={activeGroup.membershipRole === "ADMIN"}
+          />
         );
       }
 

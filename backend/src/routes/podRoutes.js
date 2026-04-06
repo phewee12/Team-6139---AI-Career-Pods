@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
@@ -43,6 +44,9 @@ const resumeReviewCreateSchema = z.object({
   title: z.string().trim().min(2).max(120),
   targetRole: z.string().trim().max(120).optional().or(z.literal("")),
   context: z.string().trim().max(4000).optional().or(z.literal("")),
+  fileName: z.string().trim().min(1).max(255),
+  mimeType: z.enum(["application/pdf"]),
+  contentBase64: z.string().min(1),
 });
 
 const resumeFileUploadSchema = z.object({
@@ -64,7 +68,7 @@ const resumeFeedbackSchema = z.object({
 });
 
 const resumeStatusUpdateSchema = z.object({
-  status: z.enum(["CLOSED", "WITHDRAWN"]),
+  status: z.enum(["CLOSED"]),
 });
 
 function toPodResponse(pod) {
@@ -253,7 +257,11 @@ async function getResumeRequestWithAccess(requestId, podId, userId) {
 }
 
 function toResumeReviewRequestResponse(reviewRequest, options = {}) {
-  const { includeFeedback = false, redactFeedback = false } = options;
+  const { includeFeedback = false, redactFeedback = false, currentUserId = null } = options;
+  const feedbackCount = reviewRequest.feedback?.length || 0;
+  const hasCurrentUserFeedback = Boolean(
+    currentUserId && reviewRequest.feedback?.some((feedbackItem) => feedbackItem.reviewerId === currentUserId),
+  );
 
   return {
     id: reviewRequest.id,
@@ -276,6 +284,14 @@ function toResumeReviewRequestResponse(reviewRequest, options = {}) {
           uploadedAt: reviewRequest.file.uploadedAt,
         }
       : null,
+    feedbackCount,
+    hasCurrentUserFeedback,
+    canCurrentUserReview: Boolean(
+      currentUserId &&
+        reviewRequest.status === "OPEN" &&
+        reviewRequest.requesterId !== currentUserId &&
+        !hasCurrentUserFeedback,
+    ),
     feedback: includeFeedback
       ? reviewRequest.feedback.map((feedbackItem) => ({
           id: feedbackItem.id,
@@ -327,6 +343,47 @@ function sanitizeFileName(fileName) {
 function decodeBase64Pdf(contentBase64) {
   const normalized = contentBase64.includes(",") ? contentBase64.split(",").pop() : contentBase64;
   return Buffer.from(normalized, "base64");
+}
+
+async function uploadResumePdfToStorage({ podId, requestId, userId, fileName, mimeType, contentBase64 }) {
+  const fileBuffer = decodeBase64Pdf(contentBase64);
+
+  if (fileBuffer.length === 0) {
+    const error = new Error("Resume file is empty.");
+    error.status = 400;
+    throw error;
+  }
+
+  const maxFileSizeBytes = 10 * 1024 * 1024;
+  if (fileBuffer.length > maxFileSizeBytes) {
+    const error = new Error("Resume file must be 10MB or smaller.");
+    error.status = 400;
+    throw error;
+  }
+
+  const supabase = getSupabaseClient();
+  const safeFileName = sanitizeFileName(fileName || "resume.pdf");
+  const storageBucket = config.supabaseStorageBucket;
+  const storagePath = `${podId}/${requestId}/${userId}/${Date.now()}-${safeFileName}`;
+
+  const uploadResult = await supabase.storage.from(storageBucket).upload(storagePath, fileBuffer, {
+    contentType: mimeType,
+    upsert: true,
+  });
+
+  if (uploadResult.error) {
+    const error = new Error(uploadResult.error.message || "Failed to upload resume file.");
+    error.status = 500;
+    throw error;
+  }
+
+  return {
+    storageBucket,
+    storagePath,
+    sizeBytes: fileBuffer.length,
+    originalFileName: fileName,
+    mimeType,
+  };
 }
 
 router.get("/", requireAuth, async (request, response) => {
@@ -959,13 +1016,34 @@ router.post("/:podId/resume-reviews", requireAuth, async (request, response) => 
 
     const payload = resumeReviewCreateSchema.parse(request.body);
 
+    const requestId = randomUUID();
+    const upload = await uploadResumePdfToStorage({
+      podId,
+      requestId,
+      userId: request.user.id,
+      fileName: payload.fileName,
+      mimeType: payload.mimeType,
+      contentBase64: payload.contentBase64,
+    });
+
     const reviewRequest = await prisma.podResumeReviewRequest.create({
       data: {
+        id: requestId,
         podId,
         requesterId: request.user.id,
         title: payload.title,
         targetRole: payload.targetRole || null,
         context: payload.context || null,
+        file: {
+          create: {
+            uploadedById: request.user.id,
+            storageBucket: upload.storageBucket,
+            storagePath: upload.storagePath,
+            originalFileName: upload.originalFileName,
+            mimeType: upload.mimeType,
+            sizeBytes: upload.sizeBytes,
+          },
+        },
       },
       include: {
         requester: true,
@@ -976,6 +1054,10 @@ router.post("/:podId/resume-reviews", requireAuth, async (request, response) => 
 
     return response.status(201).json({ reviewRequest: toResumeReviewRequestResponse(reviewRequest) });
   } catch (error) {
+    if (error?.status === 400) {
+      return response.status(400).json({ message: error.message });
+    }
+
     if (error?.name === "ZodError") {
       return response.status(400).json({ message: "Invalid resume review payload.", issues: error.issues });
     }
@@ -998,49 +1080,33 @@ router.post("/:podId/resume-reviews/:requestId/file", requireAuth, async (reques
     }
 
     const payload = resumeFileUploadSchema.parse(request.body);
-    const fileBuffer = decodeBase64Pdf(payload.contentBase64);
-
-    if (fileBuffer.length === 0) {
-      return response.status(400).json({ message: "Resume file is empty." });
-    }
-
-    const maxFileSizeBytes = 10 * 1024 * 1024;
-    if (fileBuffer.length > maxFileSizeBytes) {
-      return response.status(400).json({ message: "Resume file must be 10MB or smaller." });
-    }
-
-    const supabase = getSupabaseClient();
-    const fileName = sanitizeFileName(payload.fileName || "resume.pdf");
-    const storageBucket = config.supabaseStorageBucket;
-    const storagePath = `${podId}/${requestId}/${request.user.id}/${Date.now()}-${fileName}`;
-
-    const uploadResult = await supabase.storage.from(storageBucket).upload(storagePath, fileBuffer, {
-      contentType: payload.mimeType,
-      upsert: true,
+    const upload = await uploadResumePdfToStorage({
+      podId,
+      requestId,
+      userId: request.user.id,
+      fileName: payload.fileName,
+      mimeType: payload.mimeType,
+      contentBase64: payload.contentBase64,
     });
-
-    if (uploadResult.error) {
-      return response.status(500).json({ message: uploadResult.error.message || "Failed to upload resume file." });
-    }
 
     const fileRecord = await prisma.podResumeFile.upsert({
       where: { requestId },
       update: {
         uploadedById: request.user.id,
-        storageBucket,
-        storagePath,
+        storageBucket: upload.storageBucket,
+        storagePath: upload.storagePath,
         originalFileName: payload.fileName,
         mimeType: payload.mimeType,
-        sizeBytes: fileBuffer.length,
+        sizeBytes: upload.sizeBytes,
       },
       create: {
         requestId,
         uploadedById: request.user.id,
-        storageBucket,
-        storagePath,
+        storageBucket: upload.storageBucket,
+        storagePath: upload.storagePath,
         originalFileName: payload.fileName,
         mimeType: payload.mimeType,
-        sizeBytes: fileBuffer.length,
+        sizeBytes: upload.sizeBytes,
       },
     });
 
@@ -1048,8 +1114,6 @@ router.post("/:podId/resume-reviews/:requestId/file", requireAuth, async (reques
       file: {
         id: fileRecord.id,
         requestId: fileRecord.requestId,
-        storageBucket: fileRecord.storageBucket,
-        storagePath: fileRecord.storagePath,
         originalFileName: fileRecord.originalFileName,
         mimeType: fileRecord.mimeType,
         sizeBytes: fileRecord.sizeBytes,
@@ -1057,6 +1121,10 @@ router.post("/:podId/resume-reviews/:requestId/file", requireAuth, async (reques
       },
     });
   } catch (error) {
+    if (error?.status === 400) {
+      return response.status(400).json({ message: error.message });
+    }
+
     if (error?.name === "ZodError") {
       return response.status(400).json({ message: "Invalid resume file payload.", issues: error.issues });
     }
@@ -1094,6 +1162,7 @@ router.get("/:podId/resume-reviews", requireAuth, async (request, response) => {
     return response.status(200).json({
       reviewRequests: reviewRequests.map((reviewRequest) =>
         toResumeReviewRequestResponse(reviewRequest, {
+          currentUserId: request.user.id,
           redactFeedback: !access.isAdmin && reviewRequest.requesterId !== request.user.id,
         }),
       ),
@@ -1118,12 +1187,56 @@ router.get("/:podId/resume-reviews/:requestId", requireAuth, async (request, res
 
     return response.status(200).json({
       reviewRequest: toResumeReviewRequestResponse(access.request, {
+        currentUserId: request.user.id,
         includeFeedback: access.isRequester || access.canAdmin,
         redactFeedback: !access.isRequester && !access.canAdmin,
       }),
     });
   } catch (error) {
     return response.status(500).json({ message: "Failed to load resume review request." });
+  }
+});
+
+router.get("/:podId/resume-reviews/:requestId/file-url", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.canView) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    if (!access.request.file) {
+      return response.status(404).json({ message: "No resume file found for this request." });
+    }
+
+    const supabase = getSupabaseClient();
+    const expiresInSeconds = 600;
+    const signed = await supabase.storage
+      .from(access.request.file.storageBucket)
+      .createSignedUrl(access.request.file.storagePath, expiresInSeconds);
+
+    if (signed.error || !signed.data?.signedUrl) {
+      return response.status(500).json({ message: signed.error?.message || "Failed to generate file access URL." });
+    }
+
+    return response.status(200).json({
+      signedUrl: signed.data.signedUrl,
+      expiresInSeconds,
+      file: {
+        id: access.request.file.id,
+        originalFileName: access.request.file.originalFileName,
+        mimeType: access.request.file.mimeType,
+        sizeBytes: access.request.file.sizeBytes,
+        uploadedAt: access.request.file.uploadedAt,
+      },
+    });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to generate file URL." });
   }
 });
 
@@ -1138,6 +1251,10 @@ router.post("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (re
 
     if (!access.canView) {
       return response.status(403).json({ message: "Active membership required." });
+    }
+
+    if (access.request.status !== "OPEN") {
+      return response.status(400).json({ message: "This review request is closed and no longer accepts feedback." });
     }
 
     if (access.request.requesterId === request.user.id) {
@@ -1255,7 +1372,7 @@ router.patch("/:podId/resume-reviews/:requestId/status", requireAuth, async (req
       where: { id: requestId },
       data: {
         status: payload.status,
-        closedAt: payload.status === "CLOSED" || payload.status === "WITHDRAWN" ? new Date() : null,
+        closedAt: payload.status === "CLOSED" ? new Date() : null,
       },
       include: {
         requester: true,
@@ -1275,6 +1392,27 @@ router.patch("/:podId/resume-reviews/:requestId/status", requireAuth, async (req
     }
 
     return response.status(500).json({ message: "Failed to update resume review status." });
+  }
+});
+
+router.delete("/:podId/resume-reviews/:requestId", requireAuth, async (request, response) => {
+  try {
+    const { podId, requestId } = request.params;
+    const access = await getResumeRequestWithAccess(requestId, podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    if (!access.isRequester && !access.canAdmin) {
+      return response.status(403).json({ message: "Only the requester or pod admins can delete this request." });
+    }
+
+    await prisma.podResumeReviewRequest.delete({ where: { id: requestId } });
+
+    return response.status(200).json({ message: "Resume review request deleted." });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to delete resume review request." });
   }
 });
 

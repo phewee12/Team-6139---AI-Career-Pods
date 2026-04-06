@@ -314,6 +314,10 @@ export async function getResumeReviewRequest(podId, requestId) {
   return requestCached(`/pods/${podId}/resume-reviews/${requestId}`, 30000);
 }
 
+export async function getResumeReviewFileUrl(podId, requestId) {
+  return request(`/pods/${podId}/resume-reviews/${requestId}/file-url`);
+}
+
 export async function submitResumeReviewFeedback(podId, requestId, input) {
   const result = await request(`/pods/${podId}/resume-reviews/${requestId}/feedback`, {
     method: "POST",
@@ -338,6 +342,15 @@ export async function updateResumeReviewStatus(podId, requestId, status) {
   const result = await request(`/pods/${podId}/resume-reviews/${requestId}/status`, {
     method: "PATCH",
     body: { status },
+  });
+  clearCache(`/pods/${podId}/resume-reviews`);
+  clearCache(`/pods/${podId}/resume-reviews/${requestId}`);
+  return result;
+}
+
+export async function deleteResumeReviewRequest(podId, requestId) {
+  const result = await request(`/pods/${podId}/resume-reviews/${requestId}`, {
+    method: "DELETE",
   });
   clearCache(`/pods/${podId}/resume-reviews`);
   clearCache(`/pods/${podId}/resume-reviews/${requestId}`);
