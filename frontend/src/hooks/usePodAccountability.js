@@ -10,6 +10,7 @@ import {
   appendLocalSentNudge,
   buildDemoEligibility,
   loadLocalAccountability,
+  mergeServerEligibility,
   recordLocalNudgeResponse,
   setLocalQuietMode,
 } from "../lib/accountabilityStorage";
@@ -33,10 +34,7 @@ function scorecardFromHistory(history) {
 }
 
 function normalizeServerPayload(payload, members, currentUserId) {
-  const eligibility =
-    payload?.eligibility && Object.keys(payload.eligibility).length > 0
-      ? payload.eligibility
-      : buildDemoEligibility(members, currentUserId);
+  const eligibility = mergeServerEligibility(payload?.eligibility, members, currentUserId);
   const history = payload?.history || { sent: [], received: [] };
   const scorecard =
     payload?.scorecard?.nudgesSentThisMonth != null
