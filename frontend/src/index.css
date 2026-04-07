@@ -61,3 +61,20 @@ input,
 select {
   font: inherit;
 }
+
+/* The normal state */
+.secondary-action {
+  background-color: #2b4851; /* Using your dark teal */
+  color: white;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+/* The "Greyed Out" state */
+.secondary-action:disabled {
+  background-color: #ccc;    /* Light grey */
+  color: #888;               /* Muted text */
+  cursor: not-allowed;       /* Shows the "circle-slash" icon on hover */
+  border-color: #ddd;
+  opacity: 0.7;              /* Makes it look faded */
+}

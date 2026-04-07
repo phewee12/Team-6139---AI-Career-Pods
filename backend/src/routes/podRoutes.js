@@ -7,6 +7,8 @@ import { config } from "../config.js";
 import { getSupabaseClient } from "../lib/supabase.js";
 import { toPublicUser } from "../utils/users.js";
 import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js";
+import { generateStructuredFeedbackSuggestions, scanForAtsKeywords, generateFeedbackSummary } from "../services/resumeService.js";
+
 
 const router = Router();
 
@@ -1694,6 +1696,7 @@ router.get("/:podId/stats", requireAuth, async (request, response) => {
 });
 
 router.get("/notifications", requireAuth, async (request, response) => {
+  console.log("PRISMA MODELS:", Object.keys(prisma));
   try {
     const notifications = await prisma.notification.findMany({
       where: { userId: request.user.id, sentAt: { not: null } },
@@ -1742,6 +1745,81 @@ router.get("/:podId", requireAuth, async (request, response) => {
     return response.status(200).json({ pod: toPodResponse(pod) });
   } catch {
     return response.status(500).json({ message: "Failed to load pod." });
+  }
+});
+
+
+router.get("/:podId/resume-reviews/:requestId/ai-suggestions", requireAuth, async (request, response) => {
+  const { podId, requestId } = request.params;
+  const userId = request.user.id;
+
+  try {
+    const access = await getPodAccessContext(podId, userId);
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "You must be an active pod member." });
+    }
+
+    const reviewRequest = await prisma.podResumeReviewRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!reviewRequest || reviewRequest.podId !== podId) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    // Build context string from request fields
+    const context = [
+      `Title: ${reviewRequest.title}`,
+      reviewRequest.targetRole ? `Target role: ${reviewRequest.targetRole}` : null,
+      reviewRequest.context ? `Candidate context: ${reviewRequest.context}` : null,
+    ]
+      .filter(Boolean)
+      .join(". ");
+
+    const [aiSuggestions, atsResult] = await Promise.all([
+      generateStructuredFeedbackSuggestions(context, reviewRequest.targetRole),
+      scanForAtsKeywords(context, reviewRequest.targetRole),
+    ]);
+
+    return response.status(200).json({ aiSuggestions, atsResult });
+  } catch (error) {
+    console.error("AI suggestions error:", error);
+    return response.status(500).json({ message: "Failed to generate AI suggestions." });
+  }
+});
+
+// POST /api/pods/:podId/resume-reviews/:requestId/ai-summary
+// Generates a final comments summary draft from the reviewer's in-progress feedback
+router.post("/:podId/resume-reviews/:requestId/ai-summary", requireAuth, async (request, response) => {
+  const { podId, requestId } = request.params;
+  const userId = request.user.id;
+  const { strengths, improvements, overallScore } = request.body;
+
+  try {
+    const access = await getPodAccessContext(podId, userId);
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "You must be an active pod member." });
+    }
+
+    const reviewRequest = await prisma.podResumeReviewRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!reviewRequest || reviewRequest.podId !== podId) {
+      return response.status(404).json({ message: "Resume review request not found." });
+    }
+
+    const summary = await generateFeedbackSummary(
+      strengths,
+      improvements,
+      overallScore,
+      reviewRequest.targetRole
+    );
+
+    return response.status(200).json({ summary });
+  } catch (error) {
+    console.error("AI summary error:", error);
+    return response.status(500).json({ message: "Failed to generate summary." });
   }
 });
 

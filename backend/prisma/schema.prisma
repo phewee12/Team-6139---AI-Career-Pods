@@ -1,3 +1,62 @@
+    enum AuthProvider {
+      LOCAL
+      GOOGLE
+    }
+
+    enum PodVisibility {
+      PUBLIC
+      PRIVATE
+    }
+
+    enum PodMembershipStatus {
+      ACTIVE
+      PENDING
+      REJECTED
+    }
+
+    enum PodMembershipRole {
+      MEMBER
+      ADMIN
+    }
+
+    enum CheckInStatus {
+      PENDING
+      COMPLETED
+      LATE
+      SKIPPED
+    }
+
+    enum PhaseType {
+      MONDAY_SET
+      WEDNESDAY_CHECK
+      FRIDAY_REFLECT
+      WEEKEND_BREAK
+    }
+
+    enum NotificationType {
+      PHASE_REMINDER
+      CHECK_IN_REMINDER
+      REFLECTION_REMINDER
+      CELEBRATION_ALERT
+    }
+
+    enum ResumeReviewStatus {
+      OPEN
+      CLOSED
+      WITHDRAWN
+    }
+
+    enum ResumeRecommendation {
+      STRONG_YES
+      YES_WITH_EDITS
+      NEEDS_MAJOR_REVISION
+    }
+
+    enum SentimentType {
+      POSITIVE
+      NEUTRAL
+      NEGATIVE
+    }
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,57 +66,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AuthProvider {
-  LOCAL
-  GOOGLE
-}
-
-enum PodVisibility {
-  PUBLIC
-  PRIVATE
-}
-
-enum PodMembershipStatus {
-  ACTIVE
-  PENDING
-  REJECTED
-}
-
-enum PodMembershipRole {
-  MEMBER
-  ADMIN
-}
-
 model User {
-  id                  String           @id @default(uuid())
-  email               String           @unique
-  passwordHash        String?
-  fullName            String?
-  fieldOfStudy        String?
-  careerStage         String?
-  targetTimeline      String?
-  avatarUrl           String?
-  avatarData          Bytes?
-  avatarMimeType      String?
-  authProvider        AuthProvider     @default(LOCAL)
-  googleId            String?          @unique
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  createdPods         Pod[]            @relation("PodCreatedBy")
-  podMemberships      PodMembership[]  @relation("PodMembershipUser")
-  authoredPodPosts    PodPost[]        @relation("PodPostAuthor")
-  reviewedMemberships PodMembership[]  @relation("PodMembershipReviewedBy")
-  podCheckIns         PodCheckIn[]
-  podReflections      PodReflection[]
-  podCelebrations     PodCelebration[]
-  notifications       Notification[]
-  resumeReviewRequests PodResumeReviewRequest[] @relation("ResumeRequestOwner")
-  resumeReviewFilesUploaded PodResumeFile[] @relation("ResumeFileUploader")
+  id                        String                    @id @default(uuid())
+  email                     String                    @unique
+  passwordHash              String?
+  fullName                  String?
+  fieldOfStudy              String?
+  careerStage               String?
+  targetTimeline            String?
+  avatarUrl                 String?
+  authProvider              AuthProvider              @default(LOCAL)
+  googleId                  String?                   @unique
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  avatarData                Bytes?
+  avatarMimeType            String?
+  notifications             Notification[]
+  createdPods               Pod[]                     @relation("PodCreatedBy")
+  podCelebrations           PodCelebration[]
+  podCheckIns               PodCheckIn[]
+  reviewedMemberships       PodMembership[]           @relation("PodMembershipReviewedBy")
+  podMemberships            PodMembership[]           @relation("PodMembershipUser")
+  authoredPodPosts          PodPost[]                 @relation("PodPostAuthor")
+  podReflections            PodReflection[]
+  resumeReviewFilesUploaded PodResumeFile[]           @relation("ResumeFileUploader")
   resumeReviewFeedbackGiven PodResumeReviewFeedback[] @relation("ResumeFeedbackReviewer")
   nudgesSent              Nudge[]                 @relation("NudgeFrom")
   nudgesReceived          Nudge[]                 @relation("NudgeTo")
   podQuietModes           QuietMode[]
   accountabilityMetrics   AccountabilityMetric[]
+  resumeReviewRequests      PodResumeReviewRequest[]  @relation("ResumeRequestOwner")
 
   @@index([fieldOfStudy])
   @@index([careerStage])
@@ -348,25 +386,22 @@ enum SentimentType {
 
 /// Maps to table `nudges` — template vs custom, optional custom `message`, read/response tracking.
 model Nudge {
-  id         String    @id @default(uuid())
-  podId      String    @map("pod_id")
-  fromUserId String    @map("from_user_id")
-  toUserId   String    @map("to_user_id")
-  nudgeType  NudgeType @map("nudge_type")
-  /// Set when `nudge_type` is CUSTOM; may also store rendered text for display when helpful.
-  message    String?   @db.Text
-  templateId String?   @map("template_id")
-  sentAt     DateTime  @default(now()) @map("sent_at")
-  readAt     DateTime? @map("read_at")
-  response   NudgeQuickReply?
-  /// When the recipient submitted a quick reply (routing + effectiveness).
-  respondedAt DateTime? @map("responded_at")
-
-  sentimentScore   Float?         @map("sentiment_score")
-  sentimentLabel   SentimentType? @map("sentiment_label")
+  id              String          @id @default(uuid())
+  podId           String          @map("pod_id")
+  fromUserId      String          @map("from_user_id")
+  toUserId        String          @map("to_user_id")
+  nudgeType       NudgeType       @map("nudge_type")
+  message         String?         @db.Text
+  templateId      String?         @map("template_id")
+  sentAt          DateTime        @default(now()) @map("sent_at")
+  readAt          DateTime?       @map("read_at")
+  response        NudgeQuickReply?
+  respondedAt     DateTime?       @map("responded_at")
+  sentimentScore  Float?          @map("sentiment_score")
+  sentimentLabel  SentimentType?  @map("sentiment_label")
   flaggedForReview Boolean        @default(false) @map("flagged_for_review")
-  sentHourUtc      Int?           @map("sent_hour_utc")
-  sentDowUtc       Int?           @map("sent_dow_utc")
+  sentHourUtc     Int?            @map("sent_hour_utc")
+  sentDowUtc      Int?            @map("sent_dow_utc")
 
   pod      Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
   fromUser User @relation("NudgeFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
@@ -407,7 +442,6 @@ model AccountabilityMetric {
   weekStartDate  DateTime @map("week_start_date")
   nudgesReceived Int      @default(0) @map("nudges_received")
   nudgesSent     Int      @default(0) @map("nudges_sent")
-  /// 0–1 fraction of nudges that received a quick reply in this window (optional cache).
   responseRate   Float?   @map("response_rate")
 
   pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
