@@ -1792,3 +1792,358 @@ button {
   text-align: center;
   color: var(--muted);
 }
+
+/* Accountability & nudges */
+.members-feature-section {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.members-accountability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+.accountability-scorecard .scorecard-heading {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.scorecard-privacy {
+  margin: 0 0 1rem;
+}
+
+.scorecard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.scorecard-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.65rem;
+  align-items: start;
+  line-height: 1.45;
+}
+
+.scorecard-stat {
+  font-weight: 800;
+  font-size: 1.35rem;
+  color: var(--primary);
+  min-width: 2rem;
+}
+
+.scorecard-copy {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.quiet-mode-card h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.quiet-mode-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.quiet-until-label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.quiet-date-input {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  font: inherit;
+}
+
+.quiet-preview {
+  font-size: 0.88rem;
+  color: var(--muted);
+  background: var(--lavender-mist);
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--line);
+}
+
+.quiet-preview strong {
+  color: var(--ink);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.member-card-with-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.65rem 0.65rem 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: white;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.member-card-with-actions:hover {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  box-shadow: 0 8px 14px rgba(86, 5, 145, 0.12);
+}
+
+.member-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.member-card-main:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 0.4rem;
+}
+
+.nudge-icon-button {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  background: var(--lavender-soft);
+  color: var(--primary);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  margin-top: 0.1rem;
+  transition: background 140ms ease, transform 140ms ease, opacity 140ms ease;
+}
+
+.nudge-icon-button:hover:not(:disabled) {
+  background: var(--lavender-mist);
+  transform: scale(1.04);
+}
+
+.nudge-icon-button:disabled,
+.nudge-icon-button.disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.nudge-icon-svg {
+  pointer-events: none;
+}
+
+.nudge-composer-modal {
+  max-width: 26rem;
+}
+
+.nudge-composer-lead {
+  margin-top: 0;
+}
+
+.nudge-mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.nudge-tab {
+  flex: 1;
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--line);
+  background: white;
+  font: inherit;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.nudge-tab.active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--lavender-mist);
+  font-weight: 600;
+}
+
+.nudge-template-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.nudge-template-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  align-items: start;
+}
+
+.nudge-template-option.selected {
+  border-color: var(--primary);
+  background: var(--lavender-mist);
+}
+
+.nudge-template-option input {
+  margin-top: 0.2rem;
+}
+
+.nudge-template-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  grid-column: 2;
+}
+
+.nudge-template-preview {
+  grid-column: 2;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.nudge-preview-box {
+  background: #fafafa;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.92rem;
+}
+
+.nudge-preview-box strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.nudge-custom-wrap .intro-textarea {
+  margin-bottom: 0.25rem;
+}
+
+.nudge-history-card h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.nudge-privacy-note {
+  margin: 0 0 0.75rem;
+}
+
+.nudge-history-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.nudge-history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.nudge-history-item {
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  background: #fff;
+}
+
+.nudge-history-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  margin-bottom: 0.35rem;
+}
+
+.nudge-history-who {
+  font-weight: 600;
+}
+
+.nudge-history-meta time {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.nudge-history-preview {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.nudge-history-empty {
+  color: var(--muted);
+  font-size: 0.92rem;
+  padding: 0.5rem 0;
+}
+
+.nudge-quick-replies {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--line);
+}
+
+.nudge-reply-label {
+  display: block;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.nudge-reply-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.nudge-reply-chip {
+  font-size: 0.82rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: white;
+  cursor: pointer;
+  font: inherit;
+  color: var(--ink);
+}
+
+.nudge-reply-chip:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.nudge-reply-chip:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.nudge-replied {
+  margin: 0.5rem 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}

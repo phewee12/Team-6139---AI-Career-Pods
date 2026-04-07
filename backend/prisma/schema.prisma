@@ -91,6 +91,10 @@ model User {
   podReflections            PodReflection[]
   resumeReviewFilesUploaded PodResumeFile[]           @relation("ResumeFileUploader")
   resumeReviewFeedbackGiven PodResumeReviewFeedback[] @relation("ResumeFeedbackReviewer")
+  nudgesSent              Nudge[]                 @relation("NudgeFrom")
+  nudgesReceived          Nudge[]                 @relation("NudgeTo")
+  podQuietModes           QuietMode[]
+  accountabilityMetrics   AccountabilityMetric[]
   resumeReviewRequests      PodResumeReviewRequest[]  @relation("ResumeRequestOwner")
 
   @@index([fieldOfStudy])
@@ -98,220 +102,352 @@ model User {
 }
 
 model Pod {
-  id                   String                   @id @default(uuid())
-  slug                 String                   @unique
-  name                 String
-  description          String
-  focusArea            String
-  isDefault            Boolean                  @default(true)
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @updatedAt
-  visibility           PodVisibility            @default(PUBLIC)
-  createdById          String?
-  ritualDay            String?                  @default("MONDAY")
-  ritualHour           Int?                     @default(9)
-  notifications        Notification[]
-  createdByUser        User?                    @relation("PodCreatedBy", fields: [createdById], references: [id])
-  podCelebrations      PodCelebration[]
-  podCheckIns          PodCheckIn[]
-  memberships          PodMembership[]
-  podPhase             PodPhase?
-  posts                PodPost[]
-  podReflections       PodReflection[]
-  resumeReviewRequests PodResumeReviewRequest[]
+  id              String           @id @default(uuid())
+  slug            String           @unique
+  name            String
+  description     String
+  focusArea       String
+  visibility      PodVisibility    @default(PUBLIC)
+  isDefault       Boolean          @default(true)
+  createdById     String?
+  createdByUser   User?            @relation("PodCreatedBy", fields: [createdById], references: [id])
+  memberships     PodMembership[]
+  posts           PodPost[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  podCheckIns     PodCheckIn[]
+  podReflections  PodReflection[]
+  podCelebrations PodCelebration[]
+  ritualDay       String?          @default("MONDAY")
+  ritualHour      Int?             @default(9)
+  podPhase        PodPhase?
+  notifications   Notification[]
+  resumeReviewRequests    PodResumeReviewRequest[]
+  nudges                  Nudge[]
+  quietModes              QuietMode[]
+  accountabilityMetrics   AccountabilityMetric[]
 
   @@index([focusArea])
   @@index([visibility])
   @@index([createdById])
 }
 
-    model PodPost {
-      id        String   @id @default(uuid())
-      podId     String
-      authorId  String
-      content   String
-      createdAt DateTime @default(now())
-      updatedAt DateTime @updatedAt
-      author    User     @relation("PodPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-      pod       Pod      @relation(fields: [podId], references: [id], onDelete: Cascade)
+model PodPost {
+  id        String   @id @default(uuid())
+  podId     String
+  authorId  String
+  content   String
+  pod       Pod      @relation(fields: [podId], references: [id], onDelete: Cascade)
+  author    User     @relation("PodPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-      @@index([podId, createdAt])
-      @@index([authorId])
-    }
+  @@index([podId, createdAt])
+  @@index([authorId])
+}
 
-    model PodMembership {
-      id             String              @id @default(uuid())
-      podId          String
-      userId         String
-      role           PodMembershipRole   @default(MEMBER)
-      status         PodMembershipStatus @default(PENDING)
-      requestedAt    DateTime            @default(now())
-      joinedAt       DateTime?
-      reviewedAt     DateTime?
-      reviewedById   String?
-      introMessage   String?
-      onboardedAt    DateTime?
-      pod            Pod                 @relation(fields: [podId], references: [id], onDelete: Cascade)
-      reviewedByUser User?               @relation("PodMembershipReviewedBy", fields: [reviewedById], references: [id])
-      user           User                @relation("PodMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+model PodMembership {
+  id             String              @id @default(uuid())
+  podId          String
+  userId         String
+  role           PodMembershipRole   @default(MEMBER)
+  status         PodMembershipStatus @default(PENDING)
+  requestedAt    DateTime            @default(now())
+  joinedAt       DateTime?
+  reviewedAt     DateTime?
+  reviewedById   String?
+  pod            Pod                 @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user           User                @relation("PodMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedByUser User?               @relation("PodMembershipReviewedBy", fields: [reviewedById], references: [id])
+  onboardedAt    DateTime?
+  introMessage   String?
 
-      @@unique([podId, userId])
-      @@index([podId, status])
-      @@index([userId, status])
-      @@index([reviewedById])
-    }
+  @@unique([podId, userId])
+  @@index([podId, status])
+  @@index([userId, status])
+  @@index([reviewedById])
+}
 
-    model PodCheckIn {
-      id            String        @id @default(uuid())
-      podId         String
-      userId        String
-      weekStartDate DateTime
-      status        CheckInStatus @default(PENDING)
-      notes         String?
-      goals         String?
-      createdAt     DateTime      @default(now())
-      updatedAt     DateTime      @updatedAt
-      pod           Pod           @relation(fields: [podId], references: [id], onDelete: Cascade)
-      user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+model PodCheckIn {
+  id            String        @id @default(uuid())
+  podId         String
+  userId        String
+  weekStartDate DateTime
+  status        CheckInStatus @default(PENDING)
+  notes         String?
+  goals         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-      @@unique([podId, userId, weekStartDate])
-      @@index([podId, weekStartDate])
-      @@index([userId])
-    }
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    model PodReflection {
-      id                  String               @id @default(uuid())
-      podId               String
-      userId              String
-      weekStartDate       DateTime
-      content             String
-      createdAt           DateTime             @default(now())
-      updatedAt           DateTime             @updatedAt
-      pod                 Pod                  @relation(fields: [podId], references: [id], onDelete: Cascade)
-      user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-      reflectionSentiment ReflectionSentiment?
+  @@unique([podId, userId, weekStartDate])
+  @@index([podId, weekStartDate])
+  @@index([userId])
+}
 
-      @@index([podId, weekStartDate])
-      @@index([userId])
-    }
+model PodReflection {
+  id            String   @id @default(uuid())
+  podId         String
+  userId        String
+  weekStartDate DateTime
+  content       String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-    model PodCelebration {
-      id            String   @id @default(uuid())
-      podId         String
-      userId        String
-      weekStartDate DateTime
-      title         String
-      description   String
-      createdAt     DateTime @default(now())
-      pod           Pod      @relation(fields: [podId], references: [id], onDelete: Cascade)
-      user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pod                 Pod                  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reflectionSentiment ReflectionSentiment?
 
-      @@index([podId, weekStartDate])
-    }
+  @@index([podId, weekStartDate])
+  @@index([userId])
+}
 
-    model PodPhase {
-      id             String    @id @default(uuid())
-      podId          String    @unique
-      currentPhase   PhaseType @default(MONDAY_SET)
-      phaseStartedAt DateTime  @default(now())
-      nextPhaseAt    DateTime
-      timezone       String    @default("UTC")
-      createdAt      DateTime  @default(now())
-      updatedAt      DateTime  @updatedAt
-      pod            Pod       @relation(fields: [podId], references: [id], onDelete: Cascade)
+model PodCelebration {
+  id            String   @id @default(uuid())
+  podId         String
+  userId        String
+  weekStartDate DateTime
+  title         String
+  description   String   @db.Text
+  createdAt     DateTime @default(now())
 
-      @@index([podId])
-      @@index([currentPhase])
-    }
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    model Notification {
-      id          String           @id @default(uuid())
-      userId      String
-      podId       String
-      type        NotificationType @default(PHASE_REMINDER)
-      title       String
-      message     String
-      scheduledAt DateTime
-      sentAt      DateTime?
-      readAt      DateTime?
-      createdAt   DateTime         @default(now())
-      pod         Pod              @relation(fields: [podId], references: [id], onDelete: Cascade)
-      user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([podId, weekStartDate])
+}
 
-      @@index([userId, sentAt])
-      @@index([podId, scheduledAt])
-      @@index([scheduledAt])
-    }
+enum CheckInStatus {
+  PENDING
+  COMPLETED
+  LATE
+  SKIPPED
+}
 
-    model ReflectionSentiment {
-      id           String        @id @default(uuid())
-      reflectionId String        @unique
-      sentiment    SentimentType
-      score        Float
-      keywords     Json
-      analyzedAt   DateTime      @default(now())
-      reflection   PodReflection @relation(fields: [reflectionId], references: [id], onDelete: Cascade)
+model PodPhase {
+  id             String    @id @default(uuid())
+  podId          String    @unique
+  currentPhase   PhaseType @default(MONDAY_SET)
+  phaseStartedAt DateTime  @default(now())
+  nextPhaseAt    DateTime
+  timezone       String    @default("UTC")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-      @@index([sentiment])
-      @@index([analyzedAt])
-    }
+  pod Pod @relation(fields: [podId], references: [id], onDelete: Cascade)
 
-    model PodResumeReviewRequest {
-      id          String                    @id @default(uuid())
-      podId       String
-      requesterId String
-      status      ResumeReviewStatus        @default(OPEN)
-      title       String
-      targetRole  String?
-      context     String?
-      closedAt    DateTime?
-      createdAt   DateTime                  @default(now())
-      updatedAt   DateTime                  @updatedAt
-      file        PodResumeFile?
-      feedback    PodResumeReviewFeedback[]
-      pod         Pod                       @relation(fields: [podId], references: [id], onDelete: Cascade)
-      requester   User                      @relation("ResumeRequestOwner", fields: [requesterId], references: [id], onDelete: Cascade)
+  @@index([podId])
+  @@index([currentPhase])
+}
 
-      @@index([podId, status, createdAt])
-      @@index([requesterId, createdAt])
-    }
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  podId       String
+  type        NotificationType @default(PHASE_REMINDER)
+  title       String
+  message     String
+  scheduledAt DateTime
+  sentAt      DateTime?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
 
-    model PodResumeFile {
-      id               String                 @id @default(uuid())
-      requestId        String                 @unique
-      uploadedById     String
-      storageBucket    String
-      storagePath      String                 @unique
-      originalFileName String
-      mimeType         String
-      sizeBytes        Int
-      uploadedAt       DateTime               @default(now())
-      request          PodResumeReviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-      uploadedBy       User                   @relation("ResumeFileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
 
-      @@index([uploadedById, uploadedAt])
-    }
+  @@index([userId, sentAt])
+  @@index([podId, scheduledAt])
+  @@index([scheduledAt])
+}
 
-    model PodResumeReviewFeedback {
-      id                    String                 @id @default(uuid())
-      requestId             String
-      reviewerId            String
-      overallScore          Int?
-      impactAndResultsScore Int?
-      roleFitScore          Int?
-      atsClarityScore       Int?
-      strengths             String
-      improvements          String
-      lineLevelSuggestions  String?
-      finalComments         String?
-      recommendation        ResumeRecommendation?
-      submittedAt           DateTime               @default(now())
-      updatedAt             DateTime               @updatedAt
-      request               PodResumeReviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-      reviewer              User                   @relation("ResumeFeedbackReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+model ReflectionSentiment {
+  id           String        @id @default(uuid())
+  reflectionId String        @unique
+  sentiment    SentimentType
+  score        Float
+  keywords     String[]
+  analyzedAt   DateTime      @default(now())
 
-      @@unique([requestId, reviewerId])
-      @@index([reviewerId, submittedAt])
-      @@index([requestId, submittedAt])
-    }
+  reflection PodReflection @relation(fields: [reflectionId], references: [id], onDelete: Cascade)
 
+  @@index([sentiment])
+  @@index([analyzedAt])
+}
+
+enum PhaseType {
+  MONDAY_SET
+  WEDNESDAY_CHECK
+  FRIDAY_REFLECT
+  WEEKEND_BREAK
+}
+
+enum NotificationType {
+  PHASE_REMINDER
+  CHECK_IN_REMINDER
+  REFLECTION_REMINDER
+  CELEBRATION_ALERT
+  NUDGE_RECEIVED
+  QUIET_MODE_NOTICE
+}
+
+enum NudgeType {
+  TEMPLATE
+  CUSTOM
+}
+
+enum NudgeQuickReply {
+  BUSY_OKAY
+  NEED_SUPPORT
+  CATCH_UP
+  LETS_CHAT
+}
+
+enum ResumeReviewStatus {
+  OPEN
+  CLOSED
+  WITHDRAWN
+}
+
+enum ResumeRecommendation {
+  STRONG_YES
+  YES_WITH_EDITS
+  NEEDS_MAJOR_REVISION
+}
+
+model PodResumeReviewRequest {
+  id          String             @id @default(uuid())
+  podId       String
+  requesterId String
+  status      ResumeReviewStatus @default(OPEN)
+  title       String
+  targetRole  String?
+  context     String?            @db.Text
+  closedAt    DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  pod       Pod                       @relation(fields: [podId], references: [id], onDelete: Cascade)
+  requester User                      @relation("ResumeRequestOwner", fields: [requesterId], references: [id], onDelete: Cascade)
+  file      PodResumeFile?
+  feedback  PodResumeReviewFeedback[]
+
+  @@index([podId, status, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model PodResumeFile {
+  id               String   @id @default(uuid())
+  requestId        String   @unique
+  uploadedById     String
+  storageBucket    String
+  storagePath      String   @unique
+  originalFileName String
+  mimeType         String
+  sizeBytes        Int
+  uploadedAt       DateTime @default(now())
+
+  request    PodResumeReviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadedBy User                   @relation("ResumeFileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([uploadedById, uploadedAt])
+}
+
+model PodResumeReviewFeedback {
+  id                    String               @id @default(uuid())
+  requestId             String
+  reviewerId            String
+  overallScore          Int?
+  impactAndResultsScore Int?
+  roleFitScore          Int?
+  atsClarityScore       Int?
+  strengths             String               @db.Text
+  improvements          String               @db.Text
+  lineLevelSuggestions  String?              @db.Text
+  finalComments         String?              @db.Text
+  recommendation        ResumeRecommendation?
+  submittedAt           DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  request  PodResumeReviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  reviewer User                   @relation("ResumeFeedbackReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, reviewerId])
+  @@index([reviewerId, submittedAt])
+  @@index([requestId, submittedAt])
+}
+
+enum SentimentType {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+/// Maps to table `nudges` — template vs custom, optional custom `message`, read/response tracking.
+model Nudge {
+  id              String          @id @default(uuid())
+  podId           String          @map("pod_id")
+  fromUserId      String          @map("from_user_id")
+  toUserId        String          @map("to_user_id")
+  nudgeType       NudgeType       @map("nudge_type")
+  message         String?         @db.Text
+  templateId      String?         @map("template_id")
+  sentAt          DateTime        @default(now()) @map("sent_at")
+  readAt          DateTime?       @map("read_at")
+  response        NudgeQuickReply?
+  respondedAt     DateTime?       @map("responded_at")
+  sentimentScore  Float?          @map("sentiment_score")
+  sentimentLabel  SentimentType?  @map("sentiment_label")
+  flaggedForReview Boolean        @default(false) @map("flagged_for_review")
+  sentHourUtc     Int?            @map("sent_hour_utc")
+  sentDowUtc      Int?            @map("sent_dow_utc")
+
+  pod      Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  fromUser User @relation("NudgeFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("NudgeTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([podId, sentAt])
+  @@index([fromUserId, toUserId, sentAt])
+  @@index([toUserId, sentAt])
+  @@index([fromUserId, sentAt])
+  @@index([toUserId, readAt])
+  @@map("nudges")
+}
+
+/// Maps to table `quiet_mode`.
+model QuietMode {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  podId      String    @map("pod_id")
+  startDate  DateTime  @map("start_date")
+  endDate    DateTime? @map("end_date")
+  reason     String?
+  autoNotify Boolean   @default(true) @map("auto_notify")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, podId])
+  @@map("quiet_mode")
+}
+
+/// Weekly per-user per-pod rollups for accountability dashboards.
+model AccountabilityMetric {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  podId          String   @map("pod_id")
+  weekStartDate  DateTime @map("week_start_date")
+  nudgesReceived Int      @default(0) @map("nudges_received")
+  nudgesSent     Int      @default(0) @map("nudges_sent")
+  responseRate   Float?   @map("response_rate")
+
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, podId, weekStartDate])
+  @@index([podId, weekStartDate])
+  @@map("accountability_metrics")
+}

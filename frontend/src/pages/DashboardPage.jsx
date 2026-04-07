@@ -11,7 +11,7 @@ import {
   resetTestDatabase,
 } from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
-import PodMembersList from "../components/PodMembersList";
+import MembersFeatureSection from "../components/MembersFeatureSection";
 import WorkspaceSidebar from "../components/WorkspaceSidebar";
 import BiWeeklyRituals from "../components/BiWeeklyRituals";
 import ProgressDashboard from "../components/ProgressDashboard";
@@ -1085,12 +1085,14 @@ export default function DashboardPage({ user, onLogout }) {
 
       if (activeGroupFeature === "members") {
         return (
-          <article className="detail-card">
+          <article className="detail-card members-feature-card">
             <header className="feature-page-header">
-              <h2>Members</h2>
-              <p className="helper-copy">View active pod members and profile details.</p>
+              <h2>Members & accountability</h2>
+              <p className="helper-copy">
+                Supportive nudges, a private scorecard, and quiet mode—without pressure or shame.
+              </p>
             </header>
-            <PodMembersList podId={activeGroup.id}/>
+            <MembersFeatureSection podId={activeGroup.id} user={user} />
           </article>
         );
       }
