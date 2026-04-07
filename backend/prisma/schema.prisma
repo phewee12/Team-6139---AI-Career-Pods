@@ -38,6 +38,10 @@
       CHECK_IN_REMINDER
       REFLECTION_REMINDER
       CELEBRATION_ALERT
+      MEMBER_JOINED
+      RESUME_REVIEW_RECEIVED
+      NUDGE_RECEIVED
+      QUIET_MODE_NOTICE
     }
 
     enum ResumeReviewStatus {
@@ -82,6 +86,7 @@ model User {
   avatarData                Bytes?
   avatarMimeType            String?
   notifications             Notification[]
+  notificationsSent         Notification[]            @relation("NotificationSender")
   createdPods               Pod[]                     @relation("PodCreatedBy")
   podCelebrations           PodCelebration[]
   podCheckIns               PodCheckIn[]
@@ -219,13 +224,6 @@ model PodCelebration {
   @@index([podId, weekStartDate])
 }
 
-enum CheckInStatus {
-  PENDING
-  COMPLETED
-  LATE
-  SKIPPED
-}
-
 model PodPhase {
   id             String    @id @default(uuid())
   podId          String    @unique
@@ -245,6 +243,7 @@ model PodPhase {
 model Notification {
   id          String           @id @default(uuid())
   userId      String
+  senderId    String?
   podId       String
   type        NotificationType @default(PHASE_REMINDER)
   title       String
@@ -255,9 +254,11 @@ model Notification {
   createdAt   DateTime         @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender User? @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
   pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
 
   @@index([userId, sentAt])
+  @@index([senderId, sentAt])
   @@index([podId, scheduledAt])
   @@index([scheduledAt])
 }
@@ -276,22 +277,6 @@ model ReflectionSentiment {
   @@index([analyzedAt])
 }
 
-enum PhaseType {
-  MONDAY_SET
-  WEDNESDAY_CHECK
-  FRIDAY_REFLECT
-  WEEKEND_BREAK
-}
-
-enum NotificationType {
-  PHASE_REMINDER
-  CHECK_IN_REMINDER
-  REFLECTION_REMINDER
-  CELEBRATION_ALERT
-  NUDGE_RECEIVED
-  QUIET_MODE_NOTICE
-}
-
 enum NudgeType {
   TEMPLATE
   CUSTOM
@@ -302,18 +287,6 @@ enum NudgeQuickReply {
   NEED_SUPPORT
   CATCH_UP
   LETS_CHAT
-}
-
-enum ResumeReviewStatus {
-  OPEN
-  CLOSED
-  WITHDRAWN
-}
-
-enum ResumeRecommendation {
-  STRONG_YES
-  YES_WITH_EDITS
-  NEEDS_MAJOR_REVISION
 }
 
 model PodResumeReviewRequest {
@@ -376,12 +349,6 @@ model PodResumeReviewFeedback {
   @@unique([requestId, reviewerId])
   @@index([reviewerId, submittedAt])
   @@index([requestId, submittedAt])
-}
-
-enum SentimentType {
-  POSITIVE
-  NEUTRAL
-  NEGATIVE
 }
 
 /// Maps to table `nudges` — template vs custom, optional custom `message`, read/response tracking.

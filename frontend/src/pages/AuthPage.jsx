@@ -181,7 +181,7 @@ export default function AuthPage({ onAuthenticated }) {
         </a>
 
         <p className="footnote">
-          LinkedIn and Google OAuth is scheduled for Sprint 2.
+          LinkedIn and Google OAuth is scheduled for Sprint 3.
         </p>
       </section>
     </main>

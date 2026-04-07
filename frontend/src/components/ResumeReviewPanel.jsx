@@ -421,6 +421,89 @@ export default function ResumeReviewPanel({ podId, user, isAdmin = false }) {
     );
   }
 
+  function renderAiInsightsPanel() {
+    const atsScore = aiSuggestions?.atsResult?.atsScore;
+    const hasAtsScore = Number.isFinite(atsScore);
+    const atsPercent = hasAtsScore ? atsScore : 0;
+    return (
+      <div style={{
+        background: "linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%)",
+        border: "1px solid #c4b5fd",
+        borderRadius: 10,
+        padding: "1rem",
+        marginBottom: "1rem",
+      }}>
+        <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>✨ AI Resume Insights</p>
+        <p className="helper-copy" style={{ marginBottom: "0.75rem" }}>
+          Generate AI feedback for this resume request, including ATS score and suggested strengths/improvements.
+        </p>
+        <button
+          type="button"
+          className="secondary-action"
+          onClick={handleLoadAiSuggestions}
+          disabled={loadingAi}
+        >
+          {loadingAi ? "Generating..." : aiSuggestions ? "🔄 Refresh AI Insights" : "✨ Get AI Insights"}
+        </button>
+
+        {aiSuggestions && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+              <strong>ATS Score:</strong>
+              <div style={{ flex: 1, background: "#e5e7eb", borderRadius: 99, height: 8, maxWidth: 180 }}>
+                <div
+                  style={{
+                    width: `${atsPercent}%`,
+                    background:
+                      atsPercent >= 70
+                        ? "#16a34a"
+                        : atsPercent >= 40
+                          ? "#d97706"
+                          : "#dc2626",
+                    borderRadius: 99,
+                    height: "100%",
+                    transition: "width 0.6s ease",
+                  }}
+                />
+              </div>
+              <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{hasAtsScore ? `${atsScore}%` : "N/A"}</span>
+            </div>
+
+            {aiSuggestions?.atsResult?.insufficientContext && (
+              <p className="helper-copy" style={{ marginBottom: "0.5rem" }}>
+                ATS score needs more resume context text. Add more details in the request context for a stronger estimate.
+              </p>
+            )}
+
+            {aiSuggestions.aiSuggestions?.clarityTips?.length > 0 && (
+              <div style={{ marginBottom: "0.5rem" }}>
+                <strong>Strengths:</strong>
+                <ul style={{ margin: "0.35rem 0 0 1.1rem", padding: 0 }}>
+                  {aiSuggestions.aiSuggestions.clarityTips.map((tip) => (
+                    <li key={tip} style={{ marginBottom: "0.2rem" }}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {aiSuggestions.aiSuggestions?.impactTips?.length > 0 && (
+              <div style={{ marginBottom: "0.5rem" }}>
+                <strong>Weaknesses:</strong>
+                <ul style={{ margin: "0.35rem 0 0 1.1rem", padding: 0 }}>
+                  {aiSuggestions.aiSuggestions.impactTips.map((tip) => (
+                    <li key={tip} style={{ marginBottom: "0.2rem" }}>{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {aiSuggestions.aiSuggestions?.summaryDraft && (
+              <p><strong>Summary:</strong> {aiSuggestions.aiSuggestions.summaryDraft}</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // ── render ───────────────────────────────────────────────────────────────────
   if (loading) return <div className="helper-copy">Loading resume reviews...</div>;
 
@@ -508,6 +591,7 @@ export default function ResumeReviewPanel({ podId, user, isAdmin = false }) {
           {/* ── Feedback display (owner / admin) ── */}
           {isRequester || isAdmin ? (
             <>
+              {isRequester && renderAiInsightsPanel()}
               <h4>Feedback from reviewers</h4>
               {selectedRequest.feedback?.length ? (
                 selectedRequest.feedback.map((fb) => renderFormattedFeedback(fb, fb.id))
@@ -541,6 +625,12 @@ export default function ResumeReviewPanel({ podId, user, isAdmin = false }) {
                 padding: "1rem",
                 marginBottom: "1rem",
               }}>
+                {(() => {
+                  const atsScore = aiSuggestions?.atsResult?.atsScore;
+                  const hasAtsScore = Number.isFinite(atsScore);
+                  const atsPercent = hasAtsScore ? atsScore : 0;
+                  return (
+                    <>
                 <p style={{ fontWeight: 600, marginBottom: "0.5rem" }}>✨ AI-Powered Feedback Assistance</p>
                 <p className="helper-copy" style={{ marginBottom: "0.75rem" }}>
                   Get structured suggestions based on the resume context and target role, then click any chip to add it to your feedback.
@@ -561,15 +651,21 @@ export default function ResumeReviewPanel({ podId, user, isAdmin = false }) {
                       <strong>ATS Score:</strong>
                       <div style={{ flex: 1, background: "#e5e7eb", borderRadius: 99, height: 8, maxWidth: 180 }}>
                         <div style={{
-                          width: `${aiSuggestions.atsResult?.atsScore ?? 0}%`,
-                          background: (aiSuggestions.atsResult?.atsScore ?? 0) >= 70 ? "#16a34a" : (aiSuggestions.atsResult?.atsScore ?? 0) >= 40 ? "#d97706" : "#dc2626",
+                          width: `${atsPercent}%`,
+                          background: atsPercent >= 70 ? "#16a34a" : atsPercent >= 40 ? "#d97706" : "#dc2626",
                           borderRadius: 99,
                           height: "100%",
                           transition: "width 0.6s ease",
                         }} />
                       </div>
-                      <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{aiSuggestions.atsResult?.atsScore ?? 0}%</span>
+                      <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>{hasAtsScore ? `${atsScore}%` : "N/A"}</span>
                     </div>
+
+                    {aiSuggestions?.atsResult?.insufficientContext && (
+                      <p className="helper-copy" style={{ marginBottom: "0.5rem" }}>
+                        ATS score needs more resume context text. Add more details in the request context for a stronger estimate.
+                      </p>
+                    )}
 
                     {aiSuggestions.atsResult?.missing?.length > 0 && (
                       <>
@@ -625,6 +721,9 @@ export default function ResumeReviewPanel({ podId, user, isAdmin = false }) {
                     )}
                   </div>
                 )}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* ── Feedback Rubric — Rating Sliders ── */}

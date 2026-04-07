@@ -7,11 +7,14 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "job": "node src/jobs/phaseTransitionJob.js",
+    "env:run": "node scripts/runWithEnv.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy:supabase": "node scripts/runWithEnv.js .env prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "test": "cross-env NODE_ENV=test vitest run",
-    "test:watch": "cross-env NODE_ENV=test vitest"
+    "test:watch": "cross-env NODE_ENV=test vitest",
+    "test:supabase": "cross-env NODE_ENV=test node scripts/runWithEnv.js .env vitest run --testTimeout=10000"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

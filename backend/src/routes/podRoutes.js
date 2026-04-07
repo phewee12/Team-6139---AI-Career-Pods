@@ -7,7 +7,18 @@ import { config } from "../config.js";
 import { getSupabaseClient } from "../lib/supabase.js";
 import { toPublicUser } from "../utils/users.js";
 import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js";
-import { generateStructuredFeedbackSuggestions, scanForAtsKeywords, generateFeedbackSummary } from "../services/resumeService.js";
+import {
+  notifyCelebrationCreated,
+  notifyMemberJoined,
+  notifyPodMembers,
+  notifyResumeReviewReceived,
+  notifyNudgeReceived,
+} from "../services/notificationService.js";
+import {
+  generateStructuredFeedbackSuggestions,
+  generateStructuredFeedbackSuggestionsFromPdf,
+  generateFeedbackSummary,
+} from "../services/resumeService.js";
 
 
 const router = Router();
@@ -71,6 +82,22 @@ const resumeFeedbackSchema = z.object({
 
 const resumeStatusUpdateSchema = z.object({
   status: z.enum(["CLOSED"]),
+});
+
+const accountabilityNudgeSchema = z.object({
+  toUserId: z.string().min(1),
+  message: z.string().trim().min(1).max(500),
+  templateId: z.string().trim().max(120).optional().or(z.literal("")),
+});
+
+const accountabilityNudgeResponseSchema = z.object({
+  quickReplyId: z.string().trim().min(1).max(120),
+});
+
+const quietModeSchema = z.object({
+  enabled: z.boolean(),
+  until: z.string().datetime().nullable().optional(),
+  announcedToPod: z.boolean().optional(),
 });
 
 function toPodResponse(pod) {
@@ -283,6 +310,7 @@ function toResumeReviewRequestResponse(reviewRequest, options = {}) {
           originalFileName: reviewRequest.file.originalFileName,
           mimeType: reviewRequest.file.mimeType,
           sizeBytes: reviewRequest.file.sizeBytes,
+          uploadedById: reviewRequest.file.uploadedById,
           uploadedAt: reviewRequest.file.uploadedAt,
         }
       : null,
@@ -335,6 +363,23 @@ function toResumeFeedbackResponse(feedback, includeReviewer = false) {
     submittedAt: feedback.submittedAt,
     updatedAt: feedback.updatedAt,
     reviewer: includeReviewer ? toPublicUser(feedback.reviewer) : undefined,
+  };
+}
+
+function toNudgeHistoryEntry(nudge, currentUserId) {
+  const isReceived = nudge.toUserId === currentUserId;
+  return {
+    id: nudge.id,
+    fromUserId: nudge.fromUserId,
+    toUserId: nudge.toUserId,
+    fromName: nudge.fromUser ? toPublicUser(nudge.fromUser).fullName || toPublicUser(nudge.fromUser).email : null,
+    toName: nudge.toUser ? toPublicUser(nudge.toUser).fullName || toPublicUser(nudge.toUser).email : null,
+    preview: nudge.message ? nudge.message.slice(0, 120) : "",
+    sentAt: nudge.sentAt,
+    respondedAt: nudge.respondedAt,
+    quickReply: nudge.response || null,
+    quickReplyId: nudge.response || null,
+    displayAsAnonymous: isReceived && Boolean(nudge.sentAt),
   };
 }
 
@@ -714,6 +759,16 @@ router.post("/:podId/join", requireAuth, async (request, response) => {
             },
           });
 
+      try {
+        await notifyMemberJoined({
+          podId,
+          senderUserId: request.user.id,
+          senderName: request.user.fullName || request.user.email,
+        });
+      } catch (notificationError) {
+        console.warn("Failed to send member-joined notification:", notificationError?.message || notificationError);
+      }
+
       return response.status(200).json({
         message: "Joined group.",
         membership: toMembershipResponse(membership),
@@ -967,6 +1022,7 @@ router.patch("/:podId/requests/:membershipId", requireAuth, async (request, resp
         podId,
         status: "PENDING",
       },
+      include: { user: true },
     });
 
     if (!pendingMembership) {
@@ -989,6 +1045,18 @@ router.patch("/:podId/requests/:membershipId", requireAuth, async (request, resp
               reviewedById: request.user.id,
             },
     });
+
+      if (decision.action === "approve") {
+        try {
+          await notifyMemberJoined({
+            podId,
+            senderUserId: pendingMembership.userId,
+            senderName: pendingMembership.user?.fullName || pendingMembership.user?.email || "A pod member",
+          });
+        } catch (notificationError) {
+          console.warn("Failed to send member-joined notification:", notificationError?.message || notificationError);
+        }
+      }
 
     return response.status(200).json({
       message: decision.action === "approve" ? "Member approved." : "Join request rejected.",
@@ -1268,6 +1336,15 @@ router.post("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (re
       return response.status(403).json({ message: "Active membership required." });
     }
 
+    const existingFeedback = await prisma.podResumeReviewFeedback.findUnique({
+      where: {
+        requestId_reviewerId: {
+          requestId,
+          reviewerId: request.user.id,
+        },
+      },
+    });
+
     const payload = resumeFeedbackSchema.parse(request.body);
 
     const feedback = await prisma.podResumeReviewFeedback.upsert({
@@ -1303,6 +1380,19 @@ router.post("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (re
       },
       include: { reviewer: true },
     });
+
+    if (!existingFeedback) {
+      try {
+        await notifyResumeReviewReceived({
+          podId,
+          requesterId: access.request.requesterId,
+          reviewerName: request.user.fullName || request.user.email,
+          requestTitle: access.request.title,
+        });
+      } catch (notificationError) {
+        console.warn("Failed to send resume review notification:", notificationError?.message || notificationError);
+      }
+    }
 
     return response.status(200).json({ feedback: toResumeFeedbackResponse(feedback, true) });
   } catch (error) {
@@ -1578,6 +1668,12 @@ router.post("/:podId/celebrations", requireAuth, async (request, response) => {
       },
     });
 
+    try {
+      await notifyCelebrationCreated(podId, request.user.id, celebration.title);
+    } catch (notificationError) {
+      console.warn("Failed to send celebration notification:", notificationError?.message || notificationError);
+    }
+
     return response.status(201).json({ celebration });
   } catch (error) {
     return response.status(500).json({ message: "Failed to add celebration." });
@@ -1702,8 +1798,34 @@ router.get("/notifications", requireAuth, async (request, response) => {
       where: { userId: request.user.id, sentAt: { not: null } },
       orderBy: { scheduledAt: "desc" },
       take: 20,
+      include: {
+        user: true,
+        sender: true,
+        pod: true,
+      },
     });
-    response.status(200).json({ notifications: notifications || [] });
+
+    response.status(200).json({
+      notifications: (notifications || []).map((notification) => ({
+        id: notification.id,
+        podId: notification.podId,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        scheduledAt: notification.scheduledAt,
+        sentAt: notification.sentAt,
+        readAt: notification.readAt,
+        sender: notification.sender ? toPublicUser(notification.sender) : null,
+        receiver: notification.user ? toPublicUser(notification.user) : null,
+        pod: notification.pod
+          ? {
+              id: notification.pod.id,
+              name: notification.pod.name,
+              slug: notification.pod.slug,
+            }
+          : null,
+      })),
+    });
   } catch (error) {
     console.error("Error loading notifications:", error);
     response.status(500).json({ message: "Failed to load notifications." });
@@ -1761,25 +1883,54 @@ router.get("/:podId/resume-reviews/:requestId/ai-suggestions", requireAuth, asyn
 
     const reviewRequest = await prisma.podResumeReviewRequest.findUnique({
       where: { id: requestId },
+      include: { file: true },
     });
 
     if (!reviewRequest || reviewRequest.podId !== podId) {
       return response.status(404).json({ message: "Resume review request not found." });
     }
 
-    // Build context string from request fields
+    // Build context from resume-specific fields only. Request title is metadata, not resume content.
     const context = [
-      `Title: ${reviewRequest.title}`,
       reviewRequest.targetRole ? `Target role: ${reviewRequest.targetRole}` : null,
-      reviewRequest.context ? `Candidate context: ${reviewRequest.context}` : null,
+      reviewRequest.context ? `Resume context from requester: ${reviewRequest.context}` : null,
     ]
       .filter(Boolean)
       .join(". ");
 
-    const [aiSuggestions, atsResult] = await Promise.all([
-      generateStructuredFeedbackSuggestions(context, reviewRequest.targetRole),
-      scanForAtsKeywords(context, reviewRequest.targetRole),
-    ]);
+    let aiSuggestions;
+
+    if (reviewRequest.file?.storagePath) {
+      const bucket = reviewRequest.file.storageBucket || config.supabaseStorageBucket;
+      const supabase = getSupabaseClient();
+      const download = await supabase.storage.from(bucket).download(reviewRequest.file.storagePath);
+
+      if (download.error) {
+        throw new Error(download.error.message || "Failed to load resume file from storage.");
+      }
+
+      const fileBuffer = Buffer.from(await download.data.arrayBuffer());
+      aiSuggestions = await generateStructuredFeedbackSuggestionsFromPdf({
+        resumePdfBase64: fileBuffer.toString("base64"),
+        resumeContext: context,
+        targetRole: reviewRequest.targetRole,
+      });
+    } else {
+      aiSuggestions = await generateStructuredFeedbackSuggestions(
+        context || "No resume context was provided. Generate safe, general resume guidance.",
+        reviewRequest.targetRole,
+      );
+    }
+
+    const hasResumeContextText = Boolean(reviewRequest.context && reviewRequest.context.trim());
+    const hasResumePdf = Boolean(reviewRequest.file?.storagePath);
+
+    const atsResult = {
+      atsScore: aiSuggestions.atsScore,
+      found: [],
+      missing: [],
+      insufficientContext: !hasResumeContextText && !hasResumePdf,
+    };
 
     return response.status(200).json({ aiSuggestions, atsResult });
   } catch (error) {

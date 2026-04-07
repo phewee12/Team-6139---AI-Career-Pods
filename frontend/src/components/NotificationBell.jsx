@@ -6,6 +6,10 @@ export default function NotificationBell() {
     const [showDropdown, setShowDropdown] = useState(false);
     const unreadCount = notifications.filter(n => !n.readAt).length;
 
+    function getPersonLabel(person, fallback) {
+        return person?.fullName || person?.email || fallback;
+    }
+
     useEffect(() => {
         loadNotifications();
         const interval = setInterval(loadNotifications, 30000);
@@ -42,6 +46,9 @@ export default function NotificationBell() {
                                 <div>
                                     <strong>{notif.title}</strong>
                                     <p>{notif.message}</p>
+                                    <small>
+                                        From {getPersonLabel(notif.sender, "System")} to {getPersonLabel(notif.receiver, "You")}
+                                    </small>
                                     <small>{new Date(notif.scheduledAt).toLocaleString()}</small>
                                 </div>
                                 {!notif.readAt && (

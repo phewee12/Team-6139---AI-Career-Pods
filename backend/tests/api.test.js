@@ -1240,3 +1240,109 @@ describe("Pod Endpoints", () => {
     expect(detailResponse.body.pod).toHaveProperty("memberCount");
   });
 });
+
+describe("Accountability Data Models", () => {
+  async function createBaseEntities() {
+    const fromUser = await prisma.user.create({
+      data: {
+        email: "nudge-from@example.com",
+        authProvider: "LOCAL",
+      },
+    });
+
+    const toUser = await prisma.user.create({
+      data: {
+        email: "nudge-to@example.com",
+        authProvider: "LOCAL",
+      },
+    });
+
+    const pod = await prisma.pod.create({
+      data: {
+        slug: "nudge-test-pod",
+        name: "Nudge Test Pod",
+        description: "Pod used for accountability data model tests.",
+        focusArea: "Accountability",
+        visibility: "PRIVATE",
+        isDefault: false,
+      },
+    });
+
+    return { fromUser, toUser, pod };
+  }
+
+  it("creates a nudge with defaults and optional fields", async () => {
+    const { fromUser, toUser, pod } = await createBaseEntities();
+
+    const created = await prisma.nudge.create({
+      data: {
+        podId: pod.id,
+        fromUserId: fromUser.id,
+        toUserId: toUser.id,
+        nudgeType: "CUSTOM",
+        message: "Quick check-in: how are applications going?",
+      },
+    });
+
+    expect(created.flaggedForReview).toBe(false);
+    expect(created.response).toBeNull();
+    expect(created.readAt).toBeNull();
+    expect(created.message).toContain("check-in");
+  });
+
+  it("enforces one quiet mode record per user and pod", async () => {
+    const { fromUser, pod } = await createBaseEntities();
+
+    const first = await prisma.quietMode.create({
+      data: {
+        userId: fromUser.id,
+        podId: pod.id,
+        startDate: new Date("2026-04-07T00:00:00.000Z"),
+        reason: "Exam week",
+      },
+    });
+
+    expect(first.autoNotify).toBe(true);
+
+    await expect(
+      prisma.quietMode.create({
+        data: {
+          userId: fromUser.id,
+          podId: pod.id,
+          startDate: new Date("2026-04-08T00:00:00.000Z"),
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("enforces weekly uniqueness for accountability metrics", async () => {
+    const { fromUser, pod } = await createBaseEntities();
+    const weekStartDate = new Date("2026-04-06T00:00:00.000Z");
+
+    const metric = await prisma.accountabilityMetric.create({
+      data: {
+        userId: fromUser.id,
+        podId: pod.id,
+        weekStartDate,
+        nudgesReceived: 3,
+        nudgesSent: 2,
+        responseRate: 0.67,
+      },
+    });
+
+    expect(metric.nudgesReceived).toBe(3);
+    expect(metric.nudgesSent).toBe(2);
+
+    await expect(
+      prisma.accountabilityMetric.create({
+        data: {
+          userId: fromUser.id,
+          podId: pod.id,
+          weekStartDate,
+          nudgesReceived: 1,
+          nudgesSent: 1,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+});

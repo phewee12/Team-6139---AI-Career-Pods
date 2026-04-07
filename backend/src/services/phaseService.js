@@ -1,4 +1,17 @@
 import { prisma } from "../lib/prisma.js";
+import { notifyPhaseChange } from "./notificationService.js";
+
+function getNextPhase(currentPhase) {
+    switch (currentPhase) {
+        case "MONDAY_SET":
+            return "WEDNESDAY_CHECK";
+        case "WEDNESDAY_CHECK":
+            return "FRIDAY_REFLECT";
+        case "FRIDAY_REFLECT":
+        default:
+            return "MONDAY_SET";
+    }
+}
 
 export async function getCurrentPhase(podId) {
     let phase = await prisma.podPhase.findUnique({
@@ -32,6 +45,26 @@ export async function initializePodPhase(podId, timezone = "UTC") {
             timezone,
         },
     });
+}
+
+export async function transitionToNextPhase(podId) {
+    const current = await getCurrentPhase(podId);
+    const nextPhase = getNextPhase(current.currentPhase);
+    const now = new Date();
+    const nextPhaseAt = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);
+
+    const updated = await prisma.podPhase.update({
+        where: { podId },
+        data: {
+            currentPhase: nextPhase,
+            phaseStartedAt: now,
+            nextPhaseAt,
+        },
+    });
+
+    await notifyPhaseChange(podId, nextPhase);
+
+    return updated;
 }
 
 export async function getPromptForPhase(podId, userId, phase) {
