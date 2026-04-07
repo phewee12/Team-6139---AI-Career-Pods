@@ -14,9 +14,10 @@
     "test:watch": "cross-env NODE_ENV=test vitest"
   },
   "dependencies": {
-    "@prisma/client": "^6.6.0",
+    "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^6.4.1",
     "@supabase/supabase-js": "^2.101.1",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -29,7 +30,7 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "nodemon": "^3.1.9",
-    "prisma": "^6.19.2",
+    "prisma": "^6.4.1",
     "supertest": "^7.1.4",
     "vitest": "^4.1.0"
   }

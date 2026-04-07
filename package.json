@@ -27,6 +27,7 @@
     "backend"
   ],
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "prisma": "^7.6.0"
   }
 }
