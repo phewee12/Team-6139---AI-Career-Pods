@@ -82,24 +82,43 @@ export function setLocalQuietMode(podId, quietMode) {
   saveLocalAccountability(podId, state);
 }
 
-/** Demo eligibility when API is absent: first other member can be nudged (missed goals). */
+/**
+ * Baseline eligibility when the API is absent or used as defaults before merge.
+ * All other members are eligible so multiple nudges can be tested; the real API
+ * should override per member (cooldown, missed goals, quiet mode).
+ */
 export function buildDemoEligibility(members, currentUserId) {
   const eligibility = {};
   const others = (members || []).filter((m) => m.id !== currentUserId);
-  others.forEach((m, index) => {
-    if (index === 0) {
-      eligibility[m.id] = {
-        canNudge: true,
-        reasons: ["MISSED_GOALS"],
-        nudgesPaused: false,
-      };
-    } else {
-      eligibility[m.id] = {
+  others.forEach((m) => {
+    eligibility[m.id] = {
+      canNudge: true,
+      reasons: ["MISSED_GOALS"],
+      nudgesPaused: false,
+    };
+  });
+  return eligibility;
+}
+
+/**
+ * Ensures every podmate has an eligibility entry. Partial API maps (e.g. only the
+ * last nudged user) previously left other members undefined and hid the nudge control.
+ */
+export function mergeServerEligibility(serverEligibility, members, currentUserId) {
+  const base = buildDemoEligibility(members, currentUserId);
+  if (!serverEligibility || typeof serverEligibility !== "object" || Object.keys(serverEligibility).length === 0) {
+    return base;
+  }
+  const out = { ...base };
+  for (const id of Object.keys(serverEligibility)) {
+    out[id] = {
+      ...(base[id] || {
         canNudge: false,
         reasons: [],
         nudgesPaused: false,
-      };
-    }
-  });
-  return eligibility;
+      }),
+      ...serverEligibility[id],
+    };
+  }
+  return out;
 }
