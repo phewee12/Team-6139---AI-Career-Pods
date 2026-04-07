@@ -51,15 +51,17 @@ function NudgeIcon() {
 
 function MemberRow({ member, currentUserId, eligibilityEntry, accountabilityLoading, onRequestNudge, onOpenProfile }) {
   const isSelf = currentUserId && member.id === currentUserId;
-  const showNudge = Boolean(currentUserId) && !isSelf && !accountabilityLoading && eligibilityEntry !== undefined;
+  const showNudge = Boolean(currentUserId) && !isSelf && !accountabilityLoading;
+  /** Default when API omits this member id so the control still renders (mergeServerEligibility fills this in normal flow). */
+  const e = eligibilityEntry ?? { canNudge: false, reasons: [], nudgesPaused: false };
 
   let nudgeTitle = "Send a supportive nudge";
   let nudgeDisabled = false;
   if (showNudge) {
-    if (eligibilityEntry?.nudgesPaused) {
+    if (e.nudgesPaused) {
       nudgeDisabled = true;
       nudgeTitle = "This podmate has paused nudges for now";
-    } else if (!eligibilityEntry?.canNudge) {
+    } else if (!e.canNudge) {
       nudgeDisabled = true;
       nudgeTitle = "Available when someone misses goals or a check-in";
     }
