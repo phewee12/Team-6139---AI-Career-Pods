@@ -105,6 +105,7 @@ function clearPodCache(podId) {
     `/pods/${podId}/stats`,
     `/pods/${podId}/celebrations/all`,
     `/pods/${podId}/posts`,
+    `/pods/${podId}/accountability`,
     "/pods",
   ].forEach(clearCache);
 }
@@ -183,6 +184,38 @@ export async function completePodOnboarding(podId, introMessage) {
 
 export async function getPodMembers(podId) {
   return requestCached(`/pods/${podId}/members`, 45000);
+}
+
+/** Accountability & nudges — backend may return 404 until implemented. */
+export async function getPodAccountability(podId) {
+  return request(`/pods/${podId}/accountability`);
+}
+
+export async function sendPodNudge(podId, body) {
+  const result = await request(`/pods/${podId}/nudges`, {
+    method: "POST",
+    body,
+  });
+  clearCache(`/pods/${podId}/accountability`);
+  return result;
+}
+
+export async function respondToPodNudge(podId, nudgeId, body) {
+  const result = await request(`/pods/${podId}/nudges/${nudgeId}/respond`, {
+    method: "POST",
+    body,
+  });
+  clearCache(`/pods/${podId}/accountability`);
+  return result;
+}
+
+export async function setPodQuietMode(podId, body) {
+  const result = await request(`/pods/${podId}/accountability/quiet-mode`, {
+    method: "PUT",
+    body,
+  });
+  clearCache(`/pods/${podId}/accountability`);
+  return result;
 }
 
 export async function getUserPods() {
