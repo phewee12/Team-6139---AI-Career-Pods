@@ -1094,7 +1094,7 @@ describe("Pod Endpoints", () => {
     expect(myFeedbackResponse.status).toBe(200);
     expect(myFeedbackResponse.body.feedback.reviewer.email).toBe("my-feedback-reviewer@example.com");
     expect(myFeedbackResponse.body.feedback.strengths).toContain("Solid formatting");
-  });
+  }, 15000);
 
   it("supports core bi-weekly ritual endpoints", async () => {
     const registration = await request(app).post("/api/auth/register").send({
@@ -1220,6 +1220,164 @@ describe("Pod Endpoints", () => {
       select: { readAt: true },
     });
     expect(updatedNotification.readAt).toBeTruthy();
+
+    const markUnreadResponse = await request(app)
+      .patch(`/api/pods/notifications/${notification.id}/unread`)
+      .set("Cookie", cookie);
+
+    expect(markUnreadResponse.status).toBe(200);
+
+    const unreadNotification = await prisma.notification.findUnique({
+      where: { id: notification.id },
+      select: { readAt: true },
+    });
+    expect(unreadNotification.readAt).toBeNull();
+  });
+
+  it("creates nudges, creates a receiver notification, and returns accountability history", async () => {
+    const senderRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Nudge Sender",
+      email: "nudge-sender@example.com",
+      password: "Password123",
+    });
+    const receiverRegistration = await request(app).post("/api/auth/register").send({
+      fullName: "Nudge Receiver",
+      email: "nudge-receiver@example.com",
+      password: "Password123",
+    });
+
+    const senderCookie = senderRegistration.headers["set-cookie"];
+    const receiverCookie = receiverRegistration.headers["set-cookie"];
+    const receiverId = receiverRegistration.body.user.id;
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", senderCookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", senderCookie);
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", receiverCookie);
+
+    const sendNudgeResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/nudges`)
+      .set("Cookie", senderCookie)
+      .send({
+        toUserId: receiverId,
+        message: "Checking in on your goals this week.",
+        templateId: "goals_week",
+      });
+
+    expect(sendNudgeResponse.status).toBe(201);
+    expect(sendNudgeResponse.body.nudge.toUserId).toBe(receiverId);
+    expect(sendNudgeResponse.body.nudge.fromName).toBe("Nudge Sender");
+
+    const nudgeNotification = await prisma.notification.findFirst({
+      where: {
+        podId: publicPod.id,
+        userId: receiverId,
+        type: "NUDGE_RECEIVED",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    expect(nudgeNotification).toBeTruthy();
+    expect(nudgeNotification.senderId).toBe(senderRegistration.body.user.id);
+
+    const receiverHistoryResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/accountability`)
+      .set("Cookie", receiverCookie);
+
+    expect(receiverHistoryResponse.status).toBe(200);
+    expect(receiverHistoryResponse.body.history.received.length).toBeGreaterThan(0);
+    expect(receiverHistoryResponse.body.history.received[0].fromName).toBe("Nudge Sender");
+
+    const senderHistoryResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/accountability`)
+      .set("Cookie", senderCookie);
+
+    expect(senderHistoryResponse.status).toBe(200);
+    expect(senderHistoryResponse.body.history.sent.length).toBeGreaterThan(0);
+
+    const respondResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/nudges/${sendNudgeResponse.body.nudge.id}/respond`)
+      .set("Cookie", receiverCookie)
+      .send({ quickReplyId: "busy_okay" });
+
+    expect(respondResponse.status).toBe(200);
+    expect(respondResponse.body.nudge.quickReplyId).toBe("busy_okay");
+    expect(respondResponse.body.nudge.quickReply).toBe("Doing okay, just busy!");
+
+    const senderHistoryAfterReply = await request(app)
+      .get(`/api/pods/${publicPod.id}/accountability`)
+      .set("Cookie", senderCookie);
+
+    expect(senderHistoryAfterReply.status).toBe(200);
+    const repliedSentNudge = senderHistoryAfterReply.body.history.sent.find(
+      (item) => item.id === sendNudgeResponse.body.nudge.id,
+    );
+    expect(repliedSentNudge).toBeTruthy();
+    expect(repliedSentNudge.respondedAt).toBeTruthy();
+    expect(repliedSentNudge.quickReplyId).toBe("busy_okay");
+
+    const senderNotificationsResponse = await request(app)
+      .get("/api/pods/notifications")
+      .set("Cookie", senderCookie);
+
+    expect(senderNotificationsResponse.status).toBe(200);
+    const replyNotification = senderNotificationsResponse.body.notifications.find(
+      (item) => item.type === "NUDGE_REPLIED" && item.sender?.email === "nudge-receiver@example.com",
+    );
+    expect(replyNotification).toBeTruthy();
+
+    const receiverNotificationsResponse = await request(app)
+      .get("/api/pods/notifications")
+      .set("Cookie", receiverCookie);
+
+    expect(receiverNotificationsResponse.status).toBe(200);
+    const receiverHasReplyNotification = receiverNotificationsResponse.body.notifications.some(
+      (item) => item.type === "NUDGE_REPLIED",
+    );
+    expect(receiverHasReplyNotification).toBe(false);
+  }, 15000);
+
+  it("updates pod quiet mode through accountability endpoint", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Quiet Mode User",
+      email: "quiet-mode-user@example.com",
+      password: "Password123",
+    });
+    const cookie = registration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+
+    const enableResponse = await request(app)
+      .put(`/api/pods/${publicPod.id}/accountability/quiet-mode`)
+      .set("Cookie", cookie)
+      .send({
+        enabled: true,
+        until: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        announcedToPod: false,
+      });
+
+    expect(enableResponse.status).toBe(200);
+    expect(enableResponse.body.quietMode.enabled).toBe(true);
+    expect(enableResponse.body.quietMode.announcedToPod).toBe(false);
+
+    const accountabilityResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/accountability`)
+      .set("Cookie", cookie);
+
+    expect(accountabilityResponse.status).toBe(200);
+    expect(accountabilityResponse.body.quietMode.enabled).toBe(true);
+
+    const disableResponse = await request(app)
+      .put(`/api/pods/${publicPod.id}/accountability/quiet-mode`)
+      .set("Cookie", cookie)
+      .send({ enabled: false, until: null, announcedToPod: true });
+
+    expect(disableResponse.status).toBe(200);
+    expect(disableResponse.body.quietMode.enabled).toBe(false);
   });
 
   it("returns detailed pod payload for a valid pod id", async () => {

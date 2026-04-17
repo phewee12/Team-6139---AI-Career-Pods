@@ -111,6 +111,11 @@ export default function NudgeHistoryPanel({ history, onRespond, respondBusy, loa
                   <time dateTime={row.sentAt}>{formatWhen(row.sentAt)}</time>
                 </div>
                 {row.preview && <p className="nudge-history-preview">{row.preview}</p>}
+                {row.respondedAt && (
+                  <p className="nudge-replied">
+                    Replied: <strong>{row.quickReply || "-"}</strong> on {formatWhen(row.respondedAt)}
+                  </p>
+                )}
               </li>
             ))
           )}

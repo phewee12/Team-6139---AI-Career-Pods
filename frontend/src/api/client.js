@@ -320,6 +320,10 @@ export async function markNotificationRead(notificationId) {
   return request(`/pods/notifications/${notificationId}/read`, { method: "PATCH" });
 }
 
+export async function markNotificationUnread(notificationId) {
+  return request(`/pods/notifications/${notificationId}/unread`, { method: "PATCH" });
+}
+
 export async function createResumeReviewRequest(podId, input) {
   const result = await request(`/pods/${podId}/resume-reviews`, {
     method: "POST",

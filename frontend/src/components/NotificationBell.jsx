@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getNotifications, markNotificationRead } from "../api/client";
+import { getNotifications, markNotificationRead, markNotificationUnread } from "../api/client";
 
 export default function NotificationBell() {
     const [notifications, setNotifications] = useState([]);
@@ -30,6 +30,11 @@ export default function NotificationBell() {
         loadNotifications();
     }
 
+    async function handleMarkUnread(id) {
+        await markNotificationUnread(id);
+        loadNotifications();
+    }
+
     return (
         <div className="notification-bell">
             <button onClick={() => setShowDropdown(!showDropdown)} className="bell-button">
@@ -51,8 +56,10 @@ export default function NotificationBell() {
                                     </small>
                                     <small>{new Date(notif.scheduledAt).toLocaleString()}</small>
                                 </div>
-                                {!notif.readAt && (
+                                {!notif.readAt ? (
                                     <button onClick={() => handleMarkRead(notif.id)}>Mark read</button>
+                                ) : (
+                                    <button onClick={() => handleMarkUnread(notif.id)}>Mark unread</button>
                                 )}
                             </div>
                         ))

@@ -159,6 +159,23 @@ export async function notifyNudgeReceived({ podId, toUserId, fromUserName, sende
   );
 }
 
+export async function notifyNudgeReplyReceived(
+  { podId, originalSenderUserId, responderName, senderUserId = null },
+  db = prisma,
+) {
+  return notifyPodMember(
+    podId,
+    originalSenderUserId,
+    {
+      type: "NUDGE_REPLIED",
+      title: "Your nudge got a reply",
+      message: `${responderName || "A pod member"} replied to your nudge. Open accountability to view it.`,
+      senderId: senderUserId,
+    },
+    db,
+  );
+}
+
 export async function notifyQuietModeNotice({ podId, userId, isEnabled }, db = prisma) {
   return notifyPodMember(
     podId,

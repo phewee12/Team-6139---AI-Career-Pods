@@ -10,7 +10,9 @@ import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js"
 import {
   notifyCelebrationCreated,
   notifyMemberJoined,
+  notifyNudgeReplyReceived,
   notifyPodMembers,
+  notifyQuietModeNotice,
   notifyResumeReviewReceived,
   notifyNudgeReceived,
 } from "../services/notificationService.js";
@@ -99,6 +101,24 @@ const quietModeSchema = z.object({
   until: z.string().datetime().nullable().optional(),
   announcedToPod: z.boolean().optional(),
 });
+
+const NUDGE_QUICK_REPLY_ID_TO_ENUM = {
+  busy_okay: "BUSY_OKAY",
+  need_support: "NEED_SUPPORT",
+  catch_up: "CATCH_UP",
+  lets_chat: "LETS_CHAT",
+};
+
+const NUDGE_QUICK_REPLY_ENUM_TO_ID = Object.fromEntries(
+  Object.entries(NUDGE_QUICK_REPLY_ID_TO_ENUM).map(([id, value]) => [value, id]),
+);
+
+const NUDGE_QUICK_REPLY_LABELS = {
+  busy_okay: "Doing okay, just busy!",
+  need_support: "Could use some support",
+  catch_up: "I'll catch up this weekend",
+  lets_chat: "Can we chat?",
+};
 
 function toPodResponse(pod) {
   const membership = pod.memberships?.[0] || null;
@@ -367,19 +387,23 @@ function toResumeFeedbackResponse(feedback, includeReviewer = false) {
 }
 
 function toNudgeHistoryEntry(nudge, currentUserId) {
-  const isReceived = nudge.toUserId === currentUserId;
+  const quickReplyId = nudge.response ? NUDGE_QUICK_REPLY_ENUM_TO_ID[nudge.response] || null : null;
+  const fromUser = nudge.fromUser ? toPublicUser(nudge.fromUser) : null;
+  const toUser = nudge.toUser ? toPublicUser(nudge.toUser) : null;
+
   return {
     id: nudge.id,
     fromUserId: nudge.fromUserId,
     toUserId: nudge.toUserId,
-    fromName: nudge.fromUser ? toPublicUser(nudge.fromUser).fullName || toPublicUser(nudge.fromUser).email : null,
-    toName: nudge.toUser ? toPublicUser(nudge.toUser).fullName || toPublicUser(nudge.toUser).email : null,
+    fromName: fromUser?.fullName || fromUser?.email || null,
+    toName: toUser?.fullName || toUser?.email || null,
     preview: nudge.message ? nudge.message.slice(0, 120) : "",
     sentAt: nudge.sentAt,
+    readAt: nudge.readAt,
     respondedAt: nudge.respondedAt,
-    quickReply: nudge.response || null,
-    quickReplyId: nudge.response || null,
-    displayAsAnonymous: isReceived && Boolean(nudge.sentAt),
+    quickReply: quickReplyId ? NUDGE_QUICK_REPLY_LABELS[quickReplyId] || quickReplyId : null,
+    quickReplyId,
+    displayAsAnonymous: false,
   };
 }
 
@@ -1791,8 +1815,358 @@ router.get("/:podId/stats", requireAuth, async (request, response) => {
   }
 });
 
+router.get("/:podId/accountability", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const userId = request.user.id;
+
+    const membership = await getActiveMembership(podId, userId);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "You must be an active member." });
+    }
+
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const nextMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+    const memberships = await prisma.podMembership.findMany({
+      where: { podId, status: "ACTIVE" },
+      include: { user: true },
+    });
+
+    const sentNudges = await prisma.nudge.findMany({
+      where: { podId, fromUserId: userId },
+      orderBy: { sentAt: "desc" },
+      take: 100,
+      include: {
+        fromUser: true,
+        toUser: true,
+      },
+    });
+
+    const receivedNudges = await prisma.nudge.findMany({
+      where: { podId, toUserId: userId },
+      orderBy: { sentAt: "desc" },
+      take: 100,
+      include: {
+        fromUser: true,
+        toUser: true,
+      },
+    });
+
+    const quietModes = await prisma.quietMode.findMany({
+      where: {
+        podId,
+        OR: [{ endDate: null }, { endDate: { gt: now } }],
+      },
+      select: {
+        userId: true,
+        endDate: true,
+      },
+    });
+
+    const userQuietMode = await prisma.quietMode.findUnique({
+      where: {
+        userId_podId: {
+          userId,
+          podId,
+        },
+      },
+    });
+
+    const sentCountThisMonth = await prisma.nudge.count({
+      where: {
+        podId,
+        fromUserId: userId,
+        sentAt: { gte: monthStart, lt: nextMonthStart },
+      },
+    });
+
+    const receivedCountThisMonth = await prisma.nudge.count({
+      where: {
+        podId,
+        toUserId: userId,
+        sentAt: { gte: monthStart, lt: nextMonthStart },
+      },
+    });
+
+    const activeQuietUserIds = new Set(quietModes.map((entry) => entry.userId));
+    const eligibility = {};
+
+    for (const podMembership of memberships) {
+      if (podMembership.userId === userId) {
+        continue;
+      }
+
+      const nudgesPaused = activeQuietUserIds.has(podMembership.userId);
+      eligibility[podMembership.userId] = {
+        canNudge: !nudgesPaused,
+        reasons: nudgesPaused ? [] : ["MISSED_GOALS"],
+        nudgesPaused,
+      };
+    }
+
+    const isQuietModeActive =
+      Boolean(userQuietMode) && (!userQuietMode.endDate || userQuietMode.endDate.getTime() > Date.now());
+
+    return response.status(200).json({
+      eligibility,
+      history: {
+        sent: sentNudges.map((nudge) => toNudgeHistoryEntry(nudge, userId)),
+        received: receivedNudges.map((nudge) => toNudgeHistoryEntry(nudge, userId)),
+      },
+      scorecard: {
+        nudgesSentThisMonth: sentCountThisMonth,
+        nudgesReceivedThisMonth: receivedCountThisMonth,
+      },
+      quietMode: {
+        enabled: isQuietModeActive,
+        until: isQuietModeActive ? userQuietMode.endDate : null,
+        announcedToPod: userQuietMode ? userQuietMode.autoNotify : true,
+      },
+    });
+  } catch (error) {
+    console.error("Error loading accountability:", error);
+    return response.status(500).json({ message: "Failed to load accountability." });
+  }
+});
+
+router.post("/:podId/nudges", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const userId = request.user.id;
+    const data = accountabilityNudgeSchema.parse(request.body);
+
+    if (data.toUserId === userId) {
+      return response.status(400).json({ message: "You cannot send a nudge to yourself." });
+    }
+
+    const senderMembership = await getActiveMembership(podId, userId);
+    if (!senderMembership || senderMembership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "You must be an active member to send nudges." });
+    }
+
+    const recipientMembership = await getActiveMembership(podId, data.toUserId);
+    if (!recipientMembership || recipientMembership.status !== "ACTIVE") {
+      return response.status(404).json({ message: "Recipient is not an active pod member." });
+    }
+
+    const recipientQuietMode = await prisma.quietMode.findUnique({
+      where: {
+        userId_podId: {
+          userId: data.toUserId,
+          podId,
+        },
+      },
+      select: {
+        endDate: true,
+      },
+    });
+
+    const recipientPaused =
+      Boolean(recipientQuietMode) &&
+      (!recipientQuietMode.endDate || recipientQuietMode.endDate.getTime() > Date.now());
+
+    if (recipientPaused) {
+      return response.status(409).json({ message: "This member has paused nudges for now." });
+    }
+
+    const createdNudge = await prisma.$transaction(async (transaction) => {
+      const sentAt = new Date();
+      const nudge = await transaction.nudge.create({
+        data: {
+          podId,
+          fromUserId: userId,
+          toUserId: data.toUserId,
+          nudgeType: data.templateId ? "TEMPLATE" : "CUSTOM",
+          templateId: data.templateId || null,
+          message: data.message,
+          sentAt,
+          sentHourUtc: sentAt.getUTCHours(),
+          sentDowUtc: sentAt.getUTCDay(),
+        },
+        include: {
+          fromUser: true,
+          toUser: true,
+        },
+      });
+
+      await notifyNudgeReceived(
+        {
+          podId,
+          toUserId: data.toUserId,
+          fromUserName: request.user.fullName || request.user.email,
+          senderUserId: userId,
+        },
+        transaction,
+      );
+
+      return nudge;
+    });
+
+    return response.status(201).json({
+      nudge: toNudgeHistoryEntry(createdNudge, userId),
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid nudge payload.", issues: error.issues });
+    }
+
+    console.error("Error creating nudge:", error);
+    return response.status(500).json({ message: "Failed to send nudge." });
+  }
+});
+
+router.post("/:podId/nudges/:nudgeId/respond", requireAuth, async (request, response) => {
+  try {
+    const { podId, nudgeId } = request.params;
+    const userId = request.user.id;
+    const data = accountabilityNudgeResponseSchema.parse(request.body);
+
+    const membership = await getActiveMembership(podId, userId);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "You must be an active member." });
+    }
+
+    const quickReplyEnum = NUDGE_QUICK_REPLY_ID_TO_ENUM[data.quickReplyId];
+    if (!quickReplyEnum) {
+      return response.status(400).json({ message: "Invalid quick reply id." });
+    }
+
+    const nudge = await prisma.nudge.findFirst({
+      where: {
+        id: nudgeId,
+        podId,
+      },
+      include: {
+        fromUser: true,
+        toUser: true,
+      },
+    });
+
+    if (!nudge) {
+      return response.status(404).json({ message: "Nudge not found." });
+    }
+
+    if (nudge.toUserId !== userId) {
+      return response.status(403).json({ message: "Only the recipient can respond to this nudge." });
+    }
+
+    const now = new Date();
+    const updatedNudge = await prisma.nudge.update({
+      where: { id: nudge.id },
+      data: {
+        response: quickReplyEnum,
+        respondedAt: now,
+        readAt: nudge.readAt || now,
+      },
+      include: {
+        fromUser: true,
+        toUser: true,
+      },
+    });
+
+    await notifyNudgeReplyReceived({
+      podId,
+      originalSenderUserId: updatedNudge.fromUserId,
+      responderName: request.user.fullName || request.user.email,
+      senderUserId: userId,
+    });
+
+    return response.status(200).json({
+      nudge: toNudgeHistoryEntry(updatedNudge, userId),
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid nudge response payload.", issues: error.issues });
+    }
+
+    console.error("Error responding to nudge:", error);
+    return response.status(500).json({ message: "Failed to submit nudge response." });
+  }
+});
+
+router.put("/:podId/accountability/quiet-mode", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const userId = request.user.id;
+    const data = quietModeSchema.parse(request.body);
+
+    const membership = await getActiveMembership(podId, userId);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "You must be an active member." });
+    }
+
+    if (!data.enabled) {
+      await prisma.quietMode.deleteMany({
+        where: {
+          podId,
+          userId,
+        },
+      });
+
+      await notifyQuietModeNotice({
+        podId,
+        userId,
+        isEnabled: false,
+      });
+
+      return response.status(200).json({
+        quietMode: {
+          enabled: false,
+          until: null,
+          announcedToPod: data.announcedToPod !== false,
+        },
+      });
+    }
+
+    const untilDate = data.until ? new Date(data.until) : null;
+
+    const quietMode = await prisma.quietMode.upsert({
+      where: {
+        userId_podId: {
+          userId,
+          podId,
+        },
+      },
+      create: {
+        userId,
+        podId,
+        startDate: new Date(),
+        endDate: untilDate,
+        autoNotify: data.announcedToPod !== false,
+      },
+      update: {
+        startDate: new Date(),
+        endDate: untilDate,
+        autoNotify: data.announcedToPod !== false,
+      },
+    });
+
+    await notifyQuietModeNotice({
+      podId,
+      userId,
+      isEnabled: true,
+    });
+
+    return response.status(200).json({
+      quietMode: {
+        enabled: true,
+        until: quietMode.endDate,
+        announcedToPod: quietMode.autoNotify,
+      },
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid quiet mode payload.", issues: error.issues });
+    }
+
+    console.error("Error updating quiet mode:", error);
+    return response.status(500).json({ message: "Failed to update quiet mode." });
+  }
+});
+
 router.get("/notifications", requireAuth, async (request, response) => {
-  console.log("PRISMA MODELS:", Object.keys(prisma));
   try {
     const notifications = await prisma.notification.findMany({
       where: { userId: request.user.id, sentAt: { not: null } },
@@ -1834,11 +2208,39 @@ router.get("/notifications", requireAuth, async (request, response) => {
 
 router.patch("/notifications/:notificationId/read", requireAuth, async (request, response) => {
   try {
-    await prisma.notification.update({
-      where: { id: request.params.notificationId },
+    const result = await prisma.notification.updateMany({
+      where: {
+        id: request.params.notificationId,
+        userId: request.user.id,
+      },
       data: { readAt: new Date() },
     });
+
+    if (!result.count) {
+      return response.status(404).json({ message: "Notification not found." });
+    }
+
     response.status(200).json({ message: "Notification marked as read." });
+  } catch (error) {
+    response.status(500).json({ message: "Failed to update notification." });
+  }
+});
+
+router.patch("/notifications/:notificationId/unread", requireAuth, async (request, response) => {
+  try {
+    const result = await prisma.notification.updateMany({
+      where: {
+        id: request.params.notificationId,
+        userId: request.user.id,
+      },
+      data: { readAt: null },
+    });
+
+    if (!result.count) {
+      return response.status(404).json({ message: "Notification not found." });
+    }
+
+    response.status(200).json({ message: "Notification marked as unread." });
   } catch (error) {
     response.status(500).json({ message: "Failed to update notification." });
   }
