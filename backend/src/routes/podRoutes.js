@@ -47,8 +47,23 @@ const podCreateSchema = z.object({
   visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
 });
 
+const podUpdateSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    description: z.string().trim().min(10).max(500).optional(),
+    focusArea: z.string().trim().min(2).max(120).optional(),
+    visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided.",
+  });
+
 const membershipDecisionSchema = z.object({
   action: z.enum(["approve", "reject"]),
+});
+
+const membershipRoleUpdateSchema = z.object({
+  role: z.literal("ADMIN"),
 });
 
 const podPostCreateSchema = z.object({
@@ -141,6 +156,10 @@ function toPodResponse(pod) {
   };
 }
 
+function isPrivilegedPodRole(role) {
+  return role === "OWNER" || role === "ADMIN";
+}
+
 function toMembershipResponse(membership) {
   return {
     id: membership.id,
@@ -204,9 +223,11 @@ async function getPodWithAccess(podId, userId) {
         where: {
           userId,
           status: "ACTIVE",
-          role: "ADMIN",
+          role: {
+            in: ["OWNER", "ADMIN"],
+          },
         },
-        select: { id: true },
+        select: { id: true, role: true },
         take: 1,
       },
     },
@@ -264,7 +285,7 @@ async function getPodAccessContext(podId, userId) {
 
   const activeMembership = pod.memberships[0] || null;
   const isActiveMember = Boolean(activeMembership);
-  const isAdmin = pod.createdById === userId || activeMembership?.role === "ADMIN";
+  const isAdmin = pod.createdById === userId || isPrivilegedPodRole(activeMembership?.role);
 
   return {
     exists: true,
@@ -508,7 +529,7 @@ router.post("/", requireAuth, async (request, response) => {
         data: {
           podId: createdPod.id,
           userId: request.user.id,
-          role: "ADMIN",
+          role: "OWNER",
           status: "ACTIVE",
           requestedAt: new Date(),
           joinedAt: new Date(),
@@ -543,6 +564,54 @@ router.post("/", requireAuth, async (request, response) => {
     }
 
     return response.status(500).json({ message: "Failed to create pod." });
+  }
+});
+
+router.patch("/:podId", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const data = podUpdateSchema.parse(request.body);
+
+    const access = await getPodAccessContext(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isAdmin) {
+      return response.status(403).json({ message: "Admin access required." });
+    }
+
+    await prisma.pod.update({
+      where: { id: podId },
+      data,
+    });
+
+    const updatedPod = await prisma.pod.findUnique({
+      where: { id: podId },
+      include: {
+        memberships: {
+          where: { userId: request.user.id },
+          select: { role: true, status: true },
+          take: 1,
+        },
+        _count: {
+          select: {
+            memberships: {
+              where: { status: "ACTIVE" },
+            },
+          },
+        },
+      },
+    });
+
+    return response.status(200).json({ pod: toPodResponse(updatedPod) });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid pod settings payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to update pod settings." });
   }
 });
 
@@ -676,6 +745,7 @@ router.get("/:podId/members", requireAuth, async (request, response) => {
     return response.status(200).json({
       members: members.map(m => ({
         ...toPublicUser(m.user),
+        membershipId: m.id,
         role: m.role,
         joinedAt: m.joinedAt,
         onboardedAt: m.onboardedAt,
@@ -684,6 +754,71 @@ router.get("/:podId/members", requireAuth, async (request, response) => {
     });
   } catch (error) {
     return response.status(500).json({ message: "Failed to load members." });
+  }
+});
+
+router.patch("/:podId/members/:membershipId/role", requireAuth, async (request, response) => {
+  try {
+    const { podId, membershipId } = request.params;
+    const data = membershipRoleUpdateSchema.parse(request.body);
+
+    const pod = await prisma.pod.findUnique({
+      where: { id: podId },
+      select: {
+        id: true,
+        createdById: true,
+      },
+    });
+
+    if (!pod) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (pod.createdById !== request.user.id) {
+      return response.status(403).json({ message: "Owner access required." });
+    }
+
+    const membership = await prisma.podMembership.findFirst({
+      where: {
+        id: membershipId,
+        podId,
+        status: "ACTIVE",
+      },
+      include: { user: true },
+    });
+
+    if (!membership) {
+      return response.status(404).json({ message: "Active membership not found." });
+    }
+
+    if (membership.userId === pod.createdById || membership.role === "OWNER") {
+      return response.status(400).json({ message: "Owner role cannot be changed." });
+    }
+
+    if (membership.role === data.role) {
+      return response.status(200).json({
+        membership: toMembershipResponse(membership),
+      });
+    }
+
+    const updatedMembership = await prisma.podMembership.update({
+      where: { id: membership.id },
+      data: {
+        role: data.role,
+        reviewedAt: new Date(),
+        reviewedById: request.user.id,
+      },
+    });
+
+    return response.status(200).json({
+      membership: toMembershipResponse(updatedMembership),
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid role update payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to update member role." });
   }
 });
 
@@ -979,7 +1114,15 @@ router.delete("/:podId/posts/:postId", requireAuth, async (request, response) =>
     }
 
     if (post.authorId !== request.user.id) {
-      return response.status(403).json({ message: "You can only delete your own posts." });
+      const access = await getPodAccessContext(podId, request.user.id);
+
+      if (!access.exists) {
+        return response.status(404).json({ message: "Pod not found." });
+      }
+
+      if (!access.isAdmin) {
+        return response.status(403).json({ message: "Admin access required." });
+      }
     }
 
     await prisma.podPost.delete({ where: { id: post.id } });

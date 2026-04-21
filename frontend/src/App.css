@@ -1262,6 +1262,21 @@ button {
   justify-content: flex-end;
   margin-top: 1rem;
 }
+.group-form-modal {
+  max-width: 38rem;
+  display: grid;
+  gap: 1rem;
+}
+.group-settings-form {
+  display: grid;
+  gap: 0.85rem;
+}
+.group-settings-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
 
 /* Members List Styles */
 .members-list {
@@ -2142,6 +2157,12 @@ button {
   cursor: wait;
 }
 
+.member-promote-button {
+  align-self: center;
+  white-space: nowrap;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+}
 .nudge-replied {
   margin: 0.5rem 0 0;
   font-size: 0.88rem;

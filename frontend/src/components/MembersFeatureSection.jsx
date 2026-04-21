@@ -6,7 +6,7 @@ import NudgeHistoryPanel from "./NudgeHistoryPanel";
 import PodMembersList from "./PodMembersList";
 import QuietModeControl from "./QuietModeControl";
 
-export default function MembersFeatureSection({ podId, user }) {
+export default function MembersFeatureSection({ podId, user, currentMembershipRole }) {
   const {
     state,
     loading,
@@ -55,6 +55,7 @@ export default function MembersFeatureSection({ podId, user }) {
       <PodMembersList
         podId={podId}
         currentUser={user}
+        currentMembershipRole={currentMembershipRole}
         eligibility={state?.eligibility}
         accountabilityLoading={loading}
         onRequestNudge={(member) => setNudgeRecipient(member)}

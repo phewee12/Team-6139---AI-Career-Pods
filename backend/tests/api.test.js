@@ -402,7 +402,7 @@ describe("Pod Endpoints", () => {
 
     expect(createdPodResponse.status).toBe(201);
     expect(createdPodResponse.body.pod.visibility).toBe("PRIVATE");
-    expect(createdPodResponse.body.pod.membershipRole).toBe("ADMIN");
+    expect(createdPodResponse.body.pod.membershipRole).toBe("OWNER");
 
     const memberRegistration = await request(app).post("/api/auth/register").send({
       fullName: "Private Joiner",

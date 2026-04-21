@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getPodMembers } from "../api/client";
+import { getPodMembers, promotePodMemberToAdmin } from "../api/client";
 
 function MemberAvatar({ member }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -17,6 +17,11 @@ function MemberAvatar({ member }) {
         />
       ) : (
         initial
+      )}
+      {member.role === "OWNER" && (
+        <span className="admin-badge" title="Owner">
+          👑
+        </span>
       )}
       {member.role === "ADMIN" && (
         <span className="admin-badge" title="Admin">
@@ -49,7 +54,17 @@ function NudgeIcon() {
   );
 }
 
-function MemberRow({ member, currentUserId, eligibilityEntry, accountabilityLoading, onRequestNudge, onOpenProfile }) {
+function MemberRow({
+  member,
+  currentUserId,
+  eligibilityEntry,
+  accountabilityLoading,
+  onRequestNudge,
+  onOpenProfile,
+  canPromote,
+  onPromote,
+  promoting,
+}) {
   const isSelf = currentUserId && member.id === currentUserId;
   const showNudge = Boolean(currentUserId) && !isSelf && !accountabilityLoading;
   /** Default when API omits this member id so the control still renders (mergeServerEligibility fills this in normal flow). */
@@ -94,6 +109,19 @@ function MemberRow({ member, currentUserId, eligibilityEntry, accountabilityLoad
           <NudgeIcon />
         </button>
       )}
+      {canPromote && member.role === "MEMBER" && (
+        <button
+          type="button"
+          className="secondary-action member-promote-button"
+          disabled={promoting}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPromote(member);
+          }}
+        >
+          {promoting ? "Promoting..." : "Make Admin"}
+        </button>
+      )}
     </div>
   );
 }
@@ -115,9 +143,16 @@ function profileValue(value, fallback = "Not provided") {
   return value?.trim() ? value : fallback;
 }
 
+function roleLabel(role) {
+  if (role === "OWNER") return "Owner";
+  if (role === "ADMIN") return "Admin";
+  return "Member";
+}
+
 export default function PodMembersList({
   podId,
   currentUser,
+  currentMembershipRole,
   eligibility,
   accountabilityLoading,
   onRequestNudge,
@@ -125,8 +160,36 @@ export default function PodMembersList({
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [promotingMemberId, setPromotingMemberId] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
   const currentUserId = currentUser?.id;
+  const canPromote = currentMembershipRole === "OWNER";
+
+  async function handlePromoteToAdmin(member) {
+    if (!member?.membershipId || !canPromote) {
+      return;
+    }
+
+    setActionError("");
+    setPromotingMemberId(member.id);
+    try {
+      const result = await promotePodMemberToAdmin(podId, member.membershipId);
+      const updatedMembership = result.membership;
+
+      setMembers((current) =>
+        current.map((existingMember) =>
+          existingMember.id === updatedMembership.userId
+            ? { ...existingMember, role: updatedMembership.role }
+            : existingMember,
+        ),
+      );
+    } catch (err) {
+      setActionError(err.message || "Could not promote member.");
+    } finally {
+      setPromotingMemberId(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -166,8 +229,9 @@ export default function PodMembersList({
     return <p className="error-banner">{error}</p>;
   }
 
+  const owners = members.filter((m) => m.role === "OWNER");
   const admins = members.filter((m) => m.role === "ADMIN");
-  const regularMembers = members.filter((m) => m.role !== "ADMIN");
+  const regularMembers = members.filter((m) => m.role === "MEMBER");
 
   return (
     <div className="members-list">
@@ -175,6 +239,29 @@ export default function PodMembersList({
         Click a member card for profile details. When someone misses goals or a check-in, a gentle nudge option
         appears.
       </p>
+      {actionError && <p className="error-banner">{actionError}</p>}
+
+      {owners.length > 0 && (
+        <div className="member-section">
+          <h3>Owner</h3>
+          <div className="member-grid">
+            {owners.map((member) => (
+              <MemberRow
+                key={member.id}
+                member={member}
+                currentUserId={currentUserId}
+                eligibilityEntry={eligibility?.[member.id]}
+                accountabilityLoading={accountabilityLoading}
+                onRequestNudge={onRequestNudge}
+                onOpenProfile={setSelectedMember}
+                canPromote={false}
+                onPromote={handlePromoteToAdmin}
+                promoting={promotingMemberId === member.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {admins.length > 0 && (
         <div className="member-section">
@@ -189,6 +276,9 @@ export default function PodMembersList({
                 accountabilityLoading={accountabilityLoading}
                 onRequestNudge={onRequestNudge}
                 onOpenProfile={setSelectedMember}
+                canPromote={false}
+                onPromote={handlePromoteToAdmin}
+                promoting={promotingMemberId === member.id}
               />
             ))}
           </div>
@@ -208,6 +298,9 @@ export default function PodMembersList({
                 accountabilityLoading={accountabilityLoading}
                 onRequestNudge={onRequestNudge}
                 onOpenProfile={setSelectedMember}
+                canPromote={canPromote}
+                onPromote={handlePromoteToAdmin}
+                promoting={promotingMemberId === member.id}
               />
             ))}
           </div>
@@ -233,7 +326,7 @@ export default function PodMembersList({
               <MemberAvatar member={selectedMember} />
               <div>
                 <p className="member-name member-name-large">{selectedMember.fullName || selectedMember.email}</p>
-                <p className="member-meta">{selectedMember.role === "ADMIN" ? "Admin" : "Member"}</p>
+                <p className="member-meta">{roleLabel(selectedMember.role)}</p>
               </div>
             </div>
 

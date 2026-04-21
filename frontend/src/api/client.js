@@ -171,6 +171,30 @@ export async function getPods() {
   return requestCached("/pods", 30000);
 }
 
+export async function createPod(input) {
+  const result = await request("/pods", { method: "POST", body: input });
+  clearCache("/pods");
+  return result;
+}
+
+export async function updatePodSettings(podId, input) {
+  const result = await request(`/pods/${podId}`, {
+    method: "PATCH",
+    body: input,
+  });
+  clearPodCache(podId);
+  return result;
+}
+
+export async function promotePodMemberToAdmin(podId, membershipId) {
+  const result = await request(`/pods/${podId}/members/${membershipId}/role`, {
+    method: "PATCH",
+    body: { role: "ADMIN" },
+  });
+  clearCache(`/pods/${podId}/members`);
+  return result;
+}
+
 export async function getPodOnboarding(podId) {
   return request(`/pods/${podId}/onboarding`);
 }

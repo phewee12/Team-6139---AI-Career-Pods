@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  createPod,
   createPodPost,
   deletePodPost,
   getPodOnboarding,
@@ -9,6 +10,7 @@ import {
   leavePod,
   prefetchPodFeatureData,
   resetTestDatabase,
+  updatePodSettings,
 } from "../api/client";
 import PodOnboardingModal from "../components/PodOnboardingModel";
 import MembersFeatureSection from "../components/MembersFeatureSection";
@@ -212,7 +214,9 @@ function enrichPods(pods) {
       createdAt: formatMonthYear(pod.createdAt),
       visibility,
       adminCount:
-        pod.createdById || (membershipRole === "ADMIN" && membershipStatus === "ACTIVE") ? 1 : 0,
+        pod.createdById || ((membershipRole === "OWNER" || membershipRole === "ADMIN") && membershipStatus === "ACTIVE")
+          ? 1
+          : 0,
       feedPosts: [],
     };
   });
@@ -288,6 +292,15 @@ export default function DashboardPage({ user, onLogout }) {
   const [showOnboardingModal, setShowOnboardingModal] = useState(false);
   const [resettingDb, setResettingDb] = useState(false);
   const [resetDbError, setResetDbError] = useState("");
+  const [groupFormMode, setGroupFormMode] = useState(null);
+  const [groupFormValues, setGroupFormValues] = useState({
+    name: "",
+    description: "",
+    focusArea: "",
+    visibility: "PUBLIC",
+  });
+  const [groupFormError, setGroupFormError] = useState("");
+  const [groupFormSaving, setGroupFormSaving] = useState(false);
 
   async function checkOnboardingStatus(groupId) {
     try {
@@ -461,6 +474,93 @@ export default function DashboardPage({ user, onLogout }) {
 
   const userInitial = (user.fullName || user.email || "Q").charAt(0).toUpperCase();
   const userAvatarUrl = user.avatarImageUrl || user.avatarUrl || "";
+
+  function isSettingsManager(group) {
+    if (!group) return false;
+    return group.membershipRole === "OWNER" || group.membershipRole === "ADMIN";
+  }
+
+  function openCreateGroupForm() {
+    setGroupFormMode("create");
+    setGroupFormError("");
+    setGroupFormValues({
+      name: "",
+      description: "",
+      focusArea: "",
+      visibility: "PUBLIC",
+    });
+  }
+
+  function openGroupSettingsForm() {
+    if (!activeGroup || !isSettingsManager(activeGroup)) {
+      return;
+    }
+
+    setGroupFormMode("settings");
+    setGroupFormError("");
+    setGroupFormValues({
+      name: activeGroup.name || "",
+      description: activeGroup.description || "",
+      focusArea: activeGroup.focusArea || activeGroup.category || "",
+      visibility: activeGroup.visibility || "PUBLIC",
+    });
+  }
+
+  function closeGroupForm() {
+    if (groupFormSaving) return;
+    setGroupFormMode(null);
+    setGroupFormError("");
+  }
+
+  function updateGroupFormValue(field, value) {
+    setGroupFormValues((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function handleGroupFormSubmit(event) {
+    event.preventDefault();
+    setGroupFormError("");
+
+    const payload = {
+      name: groupFormValues.name.trim(),
+      description: groupFormValues.description.trim(),
+      focusArea: groupFormValues.focusArea.trim(),
+      visibility: groupFormValues.visibility,
+    };
+
+    if (!payload.name || !payload.description || !payload.focusArea) {
+      setGroupFormError("Please fill out name, description, and focus area.");
+      return;
+    }
+
+    setGroupFormSaving(true);
+    try {
+      if (groupFormMode === "create") {
+        const result = await createPod(payload);
+        const createdPod = result.pod;
+
+        setPods((current) => [createdPod, ...current]);
+        setActiveTab("mine");
+        setActiveGroupId(createdPod.id);
+        setGroupView("detail");
+      } else if (groupFormMode === "settings" && activeGroup) {
+        const result = await updatePodSettings(activeGroup.id, payload);
+        const updatedPod = result.pod;
+
+        setPods((current) =>
+          current.map((pod) => (pod.id === updatedPod.id ? { ...pod, ...updatedPod } : pod)),
+        );
+      }
+
+      setGroupFormMode(null);
+    } catch (error) {
+      setGroupFormError(error.message || "Could not save group settings.");
+    } finally {
+      setGroupFormSaving(false);
+    }
+  }
 
   function renderPlaceholderSection(sectionId) {
     const section = SECTION_COPY[sectionId];
@@ -829,7 +929,7 @@ export default function DashboardPage({ user, onLogout }) {
                     </div>
                 )}
 
-                <button type="button" className="floating-action">
+                <button type="button" className="floating-action" onClick={openCreateGroupForm}>
                   + Create Group
                 </button>
               </>
@@ -1078,7 +1178,7 @@ export default function DashboardPage({ user, onLogout }) {
           <ResumeReviewPanel
             podId={activeGroup.id}
             user={user}
-            isAdmin={activeGroup.membershipRole === "ADMIN"}
+            isAdmin={activeGroup.membershipRole === "ADMIN" || activeGroup.membershipRole === "OWNER"}
           />
         );
       }
@@ -1092,7 +1192,11 @@ export default function DashboardPage({ user, onLogout }) {
                 Supportive nudges, a private scorecard, and quiet mode—without pressure or shame.
               </p>
             </header>
-            <MembersFeatureSection podId={activeGroup.id} user={user} />
+            <MembersFeatureSection
+              podId={activeGroup.id}
+              user={user}
+              currentMembershipRole={activeGroup.membershipRole}
+            />
           </article>
         );
       }
@@ -1234,7 +1338,12 @@ export default function DashboardPage({ user, onLogout }) {
                             : "Leave Group"}
                   </button>
               )}
-              <button type="button" className="secondary-action">
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={!isSettingsManager(activeGroup)}
+                onClick={openGroupSettingsForm}
+              >
                 Group Settings
               </button>
             </div>
@@ -1292,7 +1401,14 @@ export default function DashboardPage({ user, onLogout }) {
                 <p>Created {activeGroup.createdAt}</p>
               </article>
 
-              <button type="button" className="secondary-action">Group Settings</button>
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={!isSettingsManager(activeGroup)}
+                onClick={openGroupSettingsForm}
+              >
+                Group Settings
+              </button>
             </aside>
           </section>
         </>
@@ -1392,6 +1508,92 @@ export default function DashboardPage({ user, onLogout }) {
                 }}
                 onClose={() => setShowOnboardingModal(false)}
             />
+        )}
+
+        {groupFormMode && (
+          <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Group form">
+            <div className="modal-content group-form-modal">
+              <div className="members-view-header">
+                <h2>{groupFormMode === "create" ? "Create Group" : "Group Settings"}</h2>
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={closeGroupForm}
+                  aria-label="Close group form"
+                  disabled={groupFormSaving}
+                >
+                  ×
+                </button>
+              </div>
+
+              <form className="group-settings-form" onSubmit={handleGroupFormSubmit}>
+                <label>
+                  Group Name
+                  <input
+                    type="text"
+                    value={groupFormValues.name}
+                    onChange={(event) => updateGroupFormValue("name", event.target.value)}
+                    maxLength={120}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Description
+                  <textarea
+                    className="intro-textarea"
+                    rows={4}
+                    value={groupFormValues.description}
+                    onChange={(event) => updateGroupFormValue("description", event.target.value)}
+                    maxLength={500}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Focus Area
+                  <input
+                    type="text"
+                    value={groupFormValues.focusArea}
+                    onChange={(event) => updateGroupFormValue("focusArea", event.target.value)}
+                    maxLength={120}
+                    required
+                  />
+                </label>
+
+                <label>
+                  Visibility
+                  <select
+                    value={groupFormValues.visibility}
+                    onChange={(event) => updateGroupFormValue("visibility", event.target.value)}
+                  >
+                    <option value="PUBLIC">Public</option>
+                    <option value="PRIVATE">Private</option>
+                  </select>
+                </label>
+
+                {groupFormError && <p className="error-banner">{groupFormError}</p>}
+
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={closeGroupForm}
+                    disabled={groupFormSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="floating-action" disabled={groupFormSaving}>
+                    {groupFormSaving
+                      ? "Saving..."
+                      : groupFormMode === "create"
+                        ? "Create Group"
+                        : "Save Settings"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </main>
   );
