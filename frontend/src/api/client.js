@@ -340,6 +340,10 @@ export async function getNotifications() {
   return request(`/pods/notifications`);
 }
 
+export async function getEngagementScore(podId) {
+  return requestCached(`/pods/${podId}/engagement`, 30000);
+}
+
 export async function markNotificationRead(notificationId) {
   return request(`/pods/notifications/${notificationId}/read`, { method: "PATCH" });
 }

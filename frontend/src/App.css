@@ -2168,3 +2168,171 @@ button {
   font-size: 0.88rem;
   color: var(--muted);
 }
+
+.engagement-card {
+  background: linear-gradient(135deg, #fff 0%, #f8f5ff 100%);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.engagement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.engagement-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.engagement-icon {
+  font-size: 1.5rem;
+}
+
+.info-button {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.engagement-trend {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.score-container {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.score-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+}
+
+.score-number {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.score-max {
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.score-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.progress-bar-container {
+  background: var(--lavender-mist);
+  border-radius: 999px;
+  height: 0.5rem;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.score-description {
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+  margin: 0.75rem 0;
+}
+
+.pod-comparison {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+}
+
+.comparison-label {
+  color: var(--muted);
+}
+
+.comparison-value {
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.score-breakdown {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.score-breakdown summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.breakdown-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.engagement-skeleton {
+  height: 150px;
+  background: linear-gradient(90deg, var(--lavender-mist) 25%, var(--lavender-soft) 50%, var(--lavender-mist) 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 0.75rem;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.engagement-tooltip {
+  position: absolute;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  max-width: 250px;
+  box-shadow: var(--shadow);
+  z-index: 100;
+  font-size: 0.8rem;
+}
+
+.engagement-tooltip ul {
+  margin: 0.5rem 0;
+  padding-left: 1rem;
+}
+
+.engagement-tooltip li {
+  margin: 0.25rem 0;
+}

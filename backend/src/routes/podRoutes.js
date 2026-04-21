@@ -21,7 +21,7 @@ import {
   generateStructuredFeedbackSuggestionsFromPdf,
   generateFeedbackSummary,
 } from "../services/resumeService.js";
-
+import { updateEngagementMetrics } from "../services/engagementService.js";
 
 const router = Router();
 
@@ -1548,6 +1548,8 @@ router.post("/:podId/resume-reviews/:requestId/feedback", requireAuth, async (re
       include: { reviewer: true },
     });
 
+    await updateEngagementMetrics(request.user.id, podId, 'resumeReviewsGiven', 1);
+
     if (!existingFeedback) {
       try {
         await notifyResumeReviewReceived({
@@ -1776,6 +1778,8 @@ router.post("/:podId/checkin", requireAuth, async (request, response) => {
       },
     });
 
+    await updateEngagementMetrics(request.user.id, podId, 'checkinsCompleted', 1);
+
     return response.status(200).json({ checkIn });
   } catch (error) {
     console.error("Error saving check-in:", error);
@@ -1807,6 +1811,8 @@ router.post("/:podId/reflection", requireAuth, async (request, response) => {
       },
     });
 
+    await updateEngagementMetrics(request.user.id, podId, 'reflectionsCompleted', 1);
+
     return response.status(200).json({ reflection });
   } catch (error) {
     console.error("Error saving reflection:", error);
@@ -1834,6 +1840,8 @@ router.post("/:podId/celebrations", requireAuth, async (request, response) => {
         description: description?.trim() || "",
       },
     });
+
+    await updateEngagementMetrics(request.user.id, podId, 'celebrationsCreated', 1);
 
     try {
       await notifyCelebrationCreated(podId, request.user.id, celebration.title);
@@ -2414,6 +2422,65 @@ router.get("/:podId", requireAuth, async (request, response) => {
     return response.status(500).json({ message: "Failed to load pod." });
   }
 });
+
+router.get("/:podId/engagement", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const userId = request.user.id;
+
+    const membership = await getActiveMembership(podId, userId);
+    if (!membership || membership.status !== "ACTIVE") {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const currentScore = await getEngagementScore(userId, podId);
+    const history = await getEngagementHistory(userId, podId, 4);
+
+    const podAvg = await prisma.engagementScores.aggregate({
+      where: { podId, weekStartDate: currentScore.weekStartDate },
+      _avg: { score: true },
+    });
+
+    return response.status(200).json({
+      current: {
+        score: currentScore.score,
+        level: currentScore.level,
+        trend: currentScore.trend,
+        previousScore: currentScore.previousScore,
+      },
+      history,
+      podAverage: Math.round(podAvg._avg.score || 0),
+      breakdown: {
+        messageCount: await getMetricValue(userId, podId, 'messagesCount'),
+        goalsCompleted: await getMetricValue(userId, podId, 'goalsCompleted'),
+        applicationsSubmitted: await getMetricValue(userId, podId, 'applicationsSubmitted'),
+        checkinsCompleted: await getMetricValue(userId, podId, 'checkinsCompleted'),
+        reflectionsCompleted: await getMetricValue(userId, podId, 'reflectionsCompleted'),
+        celebrationsCreated: await getMetricValue(userId, podId, 'celebrationsCreated'),
+        resumeReviewsGiven: await getMetricValue(userId, podId, 'resumeReviewsGiven'),
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching engagement score:", error);
+    return response.status(500).json({ message: "Failed to fetch engagement score." });
+  }
+});
+
+async function getMetricValue(userId, podId, metric) {
+  const weekStartDate = getWeekStartDate(new Date());
+  const metrics = await prisma.engagementMetrics.findUnique({
+    where: {
+      userId_podId_weekStartDate: {
+        userId,
+        podId,
+        weekStartDate,
+      },
+    },
+    select: { [metric]: true },
+  });
+  return metrics?.[metric] || 0;
+}
+
 
 
 router.get("/:podId/resume-reviews/:requestId/ai-suggestions", requireAuth, async (request, response) => {
