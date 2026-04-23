@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { updateEngagementMetrics } from "./engagementService.js";
 
 function now() {
   return new Date();
@@ -83,8 +84,13 @@ function phaseNotificationContent(phase) {
 }
 
 export async function notifyPodMembers(podId, { type, title, message, excludeUserIds = [], senderId = null }, db = prisma) {
-  const userIds = await getActivePodMemberIds(podId, excludeUserIds, db);
-  return createNotifications(db, buildNotifications({ podId, userIds, senderId, type, title, message }));
+    const userIds = await getActivePodMemberIds(podId, excludeUserIds, db);
+    
+    for (const userId of userIds) {
+        await updateEngagementMetrics(userId, podId, 'messagesCount', 1);
+    }
+
+    return createNotifications(db, buildNotifications({ podId, userIds, senderId, type, title, message }));
 }
 
 export async function notifyPodMember(podId, userId, { type, title, message, senderId = null }, db = prisma) {

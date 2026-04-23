@@ -1,68 +1,69 @@
-    enum AuthProvider {
-      LOCAL
-      GOOGLE
-    }
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
 
-    enum PodVisibility {
-      PUBLIC
-      PRIVATE
-    }
+enum PodVisibility {
+  PUBLIC
+  PRIVATE
+}
 
-    enum PodMembershipStatus {
-      ACTIVE
-      PENDING
-      REJECTED
-    }
+enum PodMembershipStatus {
+  ACTIVE
+  PENDING
+  REJECTED
+}
 
-    enum PodMembershipRole {
-      OWNER
-      MEMBER
-      ADMIN
-    }
+enum PodMembershipRole {
+  OWNER
+  MEMBER
+  ADMIN
+}
 
-    enum CheckInStatus {
-      PENDING
-      COMPLETED
-      LATE
-      SKIPPED
-    }
+enum CheckInStatus {
+  PENDING
+  COMPLETED
+  LATE
+  SKIPPED
+}
 
-    enum PhaseType {
-      MONDAY_SET
-      WEDNESDAY_CHECK
-      FRIDAY_REFLECT
-      WEEKEND_BREAK
-    }
+enum PhaseType {
+  MONDAY_SET
+  WEDNESDAY_CHECK
+  FRIDAY_REFLECT
+  WEEKEND_BREAK
+}
 
-    enum NotificationType {
-      PHASE_REMINDER
-      CHECK_IN_REMINDER
-      REFLECTION_REMINDER
-      CELEBRATION_ALERT
-      MEMBER_JOINED
-      RESUME_REVIEW_RECEIVED
-      NUDGE_RECEIVED
-      NUDGE_REPLIED
-      QUIET_MODE_NOTICE
-    }
+enum NotificationType {
+  PHASE_REMINDER
+  CHECK_IN_REMINDER
+  REFLECTION_REMINDER
+  CELEBRATION_ALERT
+  MEMBER_JOINED
+  RESUME_REVIEW_RECEIVED
+  NUDGE_RECEIVED
+  NUDGE_REPLIED
+  QUIET_MODE_NOTICE
+}
 
-    enum ResumeReviewStatus {
-      OPEN
-      CLOSED
-      WITHDRAWN
-    }
+enum ResumeReviewStatus {
+  OPEN
+  CLOSED
+  WITHDRAWN
+}
 
-    enum ResumeRecommendation {
-      STRONG_YES
-      YES_WITH_EDITS
-      NEEDS_MAJOR_REVISION
-    }
+enum ResumeRecommendation {
+  STRONG_YES
+  YES_WITH_EDITS
+  NEEDS_MAJOR_REVISION
+}
 
-    enum SentimentType {
-      POSITIVE
-      NEUTRAL
-      NEGATIVE
-    }
+enum SentimentType {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -98,41 +99,45 @@ model User {
   podReflections            PodReflection[]
   resumeReviewFilesUploaded PodResumeFile[]           @relation("ResumeFileUploader")
   resumeReviewFeedbackGiven PodResumeReviewFeedback[] @relation("ResumeFeedbackReviewer")
-  nudgesSent              Nudge[]                 @relation("NudgeFrom")
-  nudgesReceived          Nudge[]                 @relation("NudgeTo")
-  podQuietModes           QuietMode[]
-  accountabilityMetrics   AccountabilityMetric[]
+  nudgesSent                Nudge[]                   @relation("NudgeFrom")
+  nudgesReceived            Nudge[]                   @relation("NudgeTo")
+  podQuietModes             QuietMode[]
+  accountabilityMetrics     AccountabilityMetric[]
   resumeReviewRequests      PodResumeReviewRequest[]  @relation("ResumeRequestOwner")
+  engagementMetrics         EngagementMetrics[]
+  engagementScores          EngagementScores[]
 
   @@index([fieldOfStudy])
   @@index([careerStage])
 }
 
 model Pod {
-  id              String           @id @default(uuid())
-  slug            String           @unique
-  name            String
-  description     String
-  focusArea       String
-  visibility      PodVisibility    @default(PUBLIC)
-  isDefault       Boolean          @default(true)
-  createdById     String?
-  createdByUser   User?            @relation("PodCreatedBy", fields: [createdById], references: [id])
-  memberships     PodMembership[]
-  posts           PodPost[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  podCheckIns     PodCheckIn[]
-  podReflections  PodReflection[]
-  podCelebrations PodCelebration[]
-  ritualDay       String?          @default("MONDAY")
-  ritualHour      Int?             @default(9)
-  podPhase        PodPhase?
-  notifications   Notification[]
-  resumeReviewRequests    PodResumeReviewRequest[]
-  nudges                  Nudge[]
-  quietModes              QuietMode[]
-  accountabilityMetrics   AccountabilityMetric[]
+  id                    String                   @id @default(uuid())
+  slug                  String                   @unique
+  name                  String
+  description           String
+  focusArea             String
+  visibility            PodVisibility            @default(PUBLIC)
+  isDefault             Boolean                  @default(true)
+  createdById           String?
+  createdByUser         User?                    @relation("PodCreatedBy", fields: [createdById], references: [id])
+  memberships           PodMembership[]
+  posts                 PodPost[]
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  podCheckIns           PodCheckIn[]
+  podReflections        PodReflection[]
+  podCelebrations       PodCelebration[]
+  ritualDay             String?                  @default("MONDAY")
+  ritualHour            Int?                     @default(9)
+  podPhase              PodPhase?
+  notifications         Notification[]
+  resumeReviewRequests  PodResumeReviewRequest[]
+  nudges                Nudge[]
+  quietModes            QuietMode[]
+  accountabilityMetrics AccountabilityMetric[]
+  engagementMetrics     EngagementMetrics[]
+  engagementScores      EngagementScores[]
 
   @@index([focusArea])
   @@index([visibility])
@@ -255,9 +260,9 @@ model Notification {
   readAt      DateTime?
   createdAt   DateTime         @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   sender User? @relation("NotificationSender", fields: [senderId], references: [id], onDelete: SetNull)
-  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+  pod    Pod   @relation(fields: [podId], references: [id], onDelete: Cascade)
 
   @@index([userId, sentAt])
   @@index([senderId, sentAt])
@@ -330,20 +335,20 @@ model PodResumeFile {
 }
 
 model PodResumeReviewFeedback {
-  id                    String               @id @default(uuid())
+  id                    String                @id @default(uuid())
   requestId             String
   reviewerId            String
   overallScore          Int?
   impactAndResultsScore Int?
   roleFitScore          Int?
   atsClarityScore       Int?
-  strengths             String               @db.Text
-  improvements          String               @db.Text
-  lineLevelSuggestions  String?              @db.Text
-  finalComments         String?              @db.Text
+  strengths             String                @db.Text
+  improvements          String                @db.Text
+  lineLevelSuggestions  String?               @db.Text
+  finalComments         String?               @db.Text
   recommendation        ResumeRecommendation?
-  submittedAt           DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  submittedAt           DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
 
   request  PodResumeReviewRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   reviewer User                   @relation("ResumeFeedbackReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
@@ -355,22 +360,22 @@ model PodResumeReviewFeedback {
 
 /// Maps to table `nudges` — template vs custom, optional custom `message`, read/response tracking.
 model Nudge {
-  id              String          @id @default(uuid())
-  podId           String          @map("pod_id")
-  fromUserId      String          @map("from_user_id")
-  toUserId        String          @map("to_user_id")
-  nudgeType       NudgeType       @map("nudge_type")
-  message         String?         @db.Text
-  templateId      String?         @map("template_id")
-  sentAt          DateTime        @default(now()) @map("sent_at")
-  readAt          DateTime?       @map("read_at")
-  response        NudgeQuickReply?
-  respondedAt     DateTime?       @map("responded_at")
-  sentimentScore  Float?          @map("sentiment_score")
-  sentimentLabel  SentimentType?  @map("sentiment_label")
-  flaggedForReview Boolean        @default(false) @map("flagged_for_review")
-  sentHourUtc     Int?            @map("sent_hour_utc")
-  sentDowUtc      Int?            @map("sent_dow_utc")
+  id               String           @id @default(uuid())
+  podId            String           @map("pod_id")
+  fromUserId       String           @map("from_user_id")
+  toUserId         String           @map("to_user_id")
+  nudgeType        NudgeType        @map("nudge_type")
+  message          String?          @db.Text
+  templateId       String?          @map("template_id")
+  sentAt           DateTime         @default(now()) @map("sent_at")
+  readAt           DateTime?        @map("read_at")
+  response         NudgeQuickReply?
+  respondedAt      DateTime?        @map("responded_at")
+  sentimentScore   Float?           @map("sentiment_score")
+  sentimentLabel   SentimentType?   @map("sentiment_label")
+  flaggedForReview Boolean          @default(false) @map("flagged_for_review")
+  sentHourUtc      Int?             @map("sent_hour_utc")
+  sentDowUtc       Int?             @map("sent_dow_utc")
 
   pod      Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
   fromUser User @relation("NudgeFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
@@ -419,4 +424,47 @@ model AccountabilityMetric {
   @@unique([userId, podId, weekStartDate])
   @@index([podId, weekStartDate])
   @@map("accountability_metrics")
+}
+
+model EngagementMetrics {
+  id                    String   @id @default(cuid())
+  userId                String
+  podId                 String
+  weekStartDate         DateTime
+  messagesCount         Int      @default(0)
+  goalsCompleted        Int      @default(0)
+  applicationsSubmitted Int      @default(0)
+  checkinsCompleted     Int      @default(0)
+  reflectionsCompleted  Int      @default(0)
+  celebrationsCreated   Int      @default(0)
+  resumeReviewsGiven    Int      @default(0)
+  nudgesSent            Int      @default(0)
+  nudgesReplied         Int      @default(0)
+  lastActiveAt          DateTime @default(now())
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, podId, weekStartDate])
+  @@index([userId, podId, weekStartDate])
+}
+
+model EngagementScores {
+  id            String   @id @default(cuid())
+  userId        String
+  podId         String
+  weekStartDate DateTime
+  score         Int
+  level         String // 'LOW', 'MEDIUM', 'HIGH'
+  previousScore Int?
+  trend         String? // 'UP', 'DOWN', 'STABLE'
+  calculatedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pod  Pod  @relation(fields: [podId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, podId, weekStartDate])
+  @@index([userId, podId, calculatedAt])
 }

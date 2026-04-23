@@ -20,6 +20,7 @@ import ProgressDashboard from "../components/ProgressDashboard";
 import CelebrationFeed from "../components/CelebrationFeed";
 import NotificationBell from "../components/NotificationBell";
 import ResumeReviewPanel from "../components/ResumeReviewPanel";
+import EngagementScore from "../components/EngagementScore";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -1355,6 +1356,8 @@ export default function DashboardPage({ user, onLogout }) {
             </div>
 
             <aside className="feed-sidebar-column">
+              <EngagementScore podId={activeGroup.id} />
+              
               <article className="detail-card compact feature-nav-card">
                 <h2>Group Features</h2>
                 <div className="feature-list">
