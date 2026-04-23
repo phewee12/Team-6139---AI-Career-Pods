@@ -21,7 +21,12 @@ import {
   generateStructuredFeedbackSuggestionsFromPdf,
   generateFeedbackSummary,
 } from "../services/resumeService.js";
-import { updateEngagementMetrics } from "../services/engagementService.js";
+import {
+  updateEngagementMetrics,
+  getEngagementScore,
+  getEngagementHistory,
+  getMetricValue
+} from "../services/engagementService.js";
 
 const router = Router();
 
@@ -2466,20 +2471,6 @@ router.get("/:podId/engagement", requireAuth, async (request, response) => {
   }
 });
 
-async function getMetricValue(userId, podId, metric) {
-  const weekStartDate = getWeekStartDate(new Date());
-  const metrics = await prisma.engagementMetrics.findUnique({
-    where: {
-      userId_podId_weekStartDate: {
-        userId,
-        podId,
-        weekStartDate,
-      },
-    },
-    select: { [metric]: true },
-  });
-  return metrics?.[metric] || 0;
-}
 
 
 

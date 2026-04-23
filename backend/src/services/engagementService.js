@@ -1,5 +1,14 @@
 import { prisma } from "../lib/prisma.js";
 
+function getWeekStartDate(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = (day === 0 ? 6 : day - 1);
+    d.setDate(d.getDate() - diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
 const WEIGHT_CONFIG = {
     messagesCount: 0.15,
     goalsCompleted: 0.20,
@@ -105,15 +114,6 @@ export async function updateEngagementMetrics(userId, podId, activityType, incre
     return metrics;
 }
 
-function getWeekStartDate(date) {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = (day === 0 ? 6 : day - 1);
-    d.setDate(d.getDate() - diff);
-    d.setHours(0, 0, 0, 0);
-    return d;
-}
-
 async function calculateAndStoreScore(userId, podId, weekStartDate) {
     const metrics = await prisma.engagementMetrics.findUnique({
         where: {
@@ -207,4 +207,19 @@ export async function getEngagementHistory(userId, podId, weeks = 4) {
     });
 
     return scores;
+}
+
+export async function getMetricValue(userId, podId, metric) {
+    const weekStartDate = getWeekStartDate(new Date());
+    const metrics = await prisma.engagementMetrics.findUnique({
+        where: {
+            userId_podId_weekStartDate: {
+                userId,
+                podId,
+                weekStartDate,
+            },
+        },
+        select: { [metric]: true },
+    });
+    return metrics?.[metric] || 0;
 }
