@@ -2336,3 +2336,63 @@ button {
 .engagement-tooltip li {
   margin: 0.25rem 0;
 }
+
+.biweekly-summary-card {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.summary-period-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.55rem;
+}
+
+.summary-period-pill {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: #fff;
+  color: var(--ink);
+  padding: 0.65rem 0.75rem;
+}
+
+.summary-period-pill small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.summary-period-pill.active {
+  border-color: var(--line-strong);
+  background: var(--lavender-soft);
+}
+
+.summary-period-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.summary-output-card {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: #fff;
+  padding: 0.9rem;
+}
+
+.summary-generated-at {
+  margin: 0 0 0.55rem;
+}
+
+.summary-output-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  color: var(--ink);
+}

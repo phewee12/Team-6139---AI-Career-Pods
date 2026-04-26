@@ -106,6 +106,7 @@ function clearPodCache(podId) {
     `/pods/${podId}/celebrations/all`,
     `/pods/${podId}/posts`,
     `/pods/${podId}/accountability`,
+    `/pods/${podId}/biweekly-summaries/periods`,
     "/pods",
   ].forEach(clearCache);
 }
@@ -344,6 +345,26 @@ export async function getEngagementScore(podId) {
   return requestCached(`/pods/${podId}/engagement`, 30000);
 }
 
+export async function getBiweeklySummaryPeriods(podId) {
+  return requestCached(`/pods/${podId}/biweekly-summaries/periods`, 20000);
+}
+
+export async function getBiweeklySummary(podId, windowStartAt) {
+  const encoded = encodeURIComponent(windowStartAt);
+  return requestCached(`/pods/${podId}/biweekly-summaries?windowStartAt=${encoded}`, 20000);
+}
+
+export async function generateBiweeklySummary(podId, windowStartAt) {
+  const result = await request(`/pods/${podId}/biweekly-summaries/generate`, {
+    method: "POST",
+    body: { windowStartAt },
+  });
+
+  clearCache(`/pods/${podId}/biweekly-summaries/periods`);
+  clearCache(`/pods/${podId}/biweekly-summaries?windowStartAt=${encodeURIComponent(windowStartAt)}`);
+  return result;
+}
+
 export async function markNotificationRead(notificationId) {
   return request(`/pods/notifications/${notificationId}/read`, { method: "PATCH" });
 }
@@ -436,6 +457,7 @@ export function prefetchPodFeatureData(podId) {
     getPodPosts(podId),
     getResumeReviewRequests(podId),
     getPodMembers(podId),
+    getBiweeklySummaryPeriods(podId),
   ];
 
   tasks.forEach((task) => {

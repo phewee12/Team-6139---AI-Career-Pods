@@ -54,9 +54,18 @@ const sampleResumePayload = {
   contentBase64: "JVBERi0xLjQKJQ==",
 };
 
+function uniqueSuffix() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function uniqueEmail(prefix) {
+  return `${prefix}-${uniqueSuffix()}@example.com`;
+}
+
 beforeEach(async () => {
   resetUploadMock();
   resetSignedUrlMock();
+  await prisma.podBiweeklySummary.deleteMany();
   await prisma.podResumeReviewFeedback.deleteMany();
   await prisma.podResumeFile.deleteMany();
   await prisma.podResumeReviewRequest.deleteMany();
@@ -69,6 +78,7 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  await prisma.podBiweeklySummary.deleteMany();
   await prisma.podResumeReviewFeedback.deleteMany();
   await prisma.podResumeFile.deleteMany();
   await prisma.podResumeReviewRequest.deleteMany();
@@ -289,11 +299,14 @@ describe("User Endpoints", () => {
   });
 
   it("stores uploaded avatar image data and serves it via avatar endpoint", async () => {
+    const email = uniqueEmail("avatar-user");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Avatar User",
-      email: "avatar-user@example.com",
+      email,
       password: "Password123",
     });
+
+    expect(registration.status).toBe(201);
 
     const cookie = registration.headers["set-cookie"];
     const tinyGifDataUrl = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -324,6 +337,15 @@ describe("User Endpoints", () => {
 });
 
 describe("Pod Endpoints", () => {
+  function getBiWeeklyStartDate(date) {
+    const d = new Date(date);
+    const daysSinceEpoch = Math.floor(d.getTime() / (1000 * 60 * 60 * 24));
+    const biWeeklyOffset = daysSinceEpoch % 14;
+    d.setDate(d.getDate() - biWeeklyOffset);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
   it("rejects pods fetch without authentication", async () => {
     const response = await request(app).get("/api/pods");
 
@@ -358,14 +380,18 @@ describe("Pod Endpoints", () => {
   });
 
   it("joins public pods immediately with ACTIVE membership", async () => {
+    const email = uniqueEmail("joiner");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Join User",
-      email: "joiner@example.com",
+      email,
       password: "Password123",
     });
 
+    expect(registration.status).toBe(201);
+
     const cookie = registration.headers["set-cookie"];
     const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
     const joinResponse = await request(app)
@@ -626,7 +652,7 @@ describe("Pod Endpoints", () => {
 
     expect(postsResponse.status).toBe(200);
     expect(postsResponse.body.posts.some((post) => post.id === createdPost.id)).toBe(false);
-  });
+  }, 15000);
 
   it("blocks non-members from creating pod posts", async () => {
     const registration = await request(app).post("/api/auth/register").send({
@@ -946,22 +972,27 @@ describe("Pod Endpoints", () => {
   });
 
   it("allows requester to delete a resume review request", async () => {
+    const requesterEmail = uniqueEmail("delete-requester");
     const requesterRegistration = await request(app).post("/api/auth/register").send({
       fullName: "Delete Requester",
-      email: "delete-requester@example.com",
+      email: requesterEmail,
       password: "Password123",
     });
+    expect(requesterRegistration.status).toBe(201);
     const requesterCookie = requesterRegistration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    const joinResponse = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    expect(joinResponse.status).toBe(200);
 
     const reviewRequestResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/resume-reviews`)
       .set("Cookie", requesterCookie)
       .send({ title: "Delete Me", ...sampleResumePayload });
+    expect(reviewRequestResponse.status).toBe(201);
 
     const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
 
@@ -979,30 +1010,38 @@ describe("Pod Endpoints", () => {
   });
 
   it("returns a signed URL for resume PDF to active pod members", async () => {
+    const requesterEmail = uniqueEmail("url-requester");
     const requesterRegistration = await request(app).post("/api/auth/register").send({
       fullName: "URL Requester",
-      email: "url-requester@example.com",
+      email: requesterEmail,
       password: "Password123",
     });
+    expect(requesterRegistration.status).toBe(201);
     const requesterCookie = requesterRegistration.headers["set-cookie"];
 
+    const reviewerEmail = uniqueEmail("url-reviewer");
     const reviewerRegistration = await request(app).post("/api/auth/register").send({
       fullName: "URL Reviewer",
-      email: "url-reviewer@example.com",
+      email: reviewerEmail,
       password: "Password123",
     });
+    expect(reviewerRegistration.status).toBe(201);
     const reviewerCookie = reviewerRegistration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+    const requesterJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    const reviewerJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+    expect(requesterJoin.status).toBe(200);
+    expect(reviewerJoin.status).toBe(200);
 
     const reviewRequestResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/resume-reviews`)
       .set("Cookie", requesterCookie)
       .send({ title: "Signed URL Resume", ...sampleResumePayload });
+    expect(reviewRequestResponse.status).toBe(201);
 
     const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
 
@@ -1018,29 +1057,36 @@ describe("Pod Endpoints", () => {
   });
 
   it("blocks non-members from accessing signed URL for resume PDF", async () => {
+    const requesterEmail = uniqueEmail("url-owner");
     const requesterRegistration = await request(app).post("/api/auth/register").send({
       fullName: "URL Owner",
-      email: "url-owner@example.com",
+      email: requesterEmail,
       password: "Password123",
     });
+    expect(requesterRegistration.status).toBe(201);
     const requesterCookie = requesterRegistration.headers["set-cookie"];
 
+    const outsiderEmail = uniqueEmail("url-outsider");
     const outsiderRegistration = await request(app).post("/api/auth/register").send({
       fullName: "URL Outsider",
-      email: "url-outsider@example.com",
+      email: outsiderEmail,
       password: "Password123",
     });
+    expect(outsiderRegistration.status).toBe(201);
     const outsiderCookie = outsiderRegistration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    const requesterJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    expect(requesterJoin.status).toBe(200);
 
     const reviewRequestResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/resume-reviews`)
       .set("Cookie", requesterCookie)
       .send({ title: "Protected Resume", ...sampleResumePayload });
+    expect(reviewRequestResponse.status).toBe(201);
 
     const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
 
@@ -1052,62 +1098,76 @@ describe("Pod Endpoints", () => {
   });
 
   it("returns the current user's submitted feedback via my-feedback endpoint", async () => {
+    const requesterEmail = uniqueEmail("my-feedback-requester");
     const requesterRegistration = await request(app).post("/api/auth/register").send({
       fullName: "My Feedback Requester",
-      email: "my-feedback-requester@example.com",
+      email: requesterEmail,
       password: "Password123",
     });
+    expect(requesterRegistration.status).toBe(201);
     const requesterCookie = requesterRegistration.headers["set-cookie"];
 
+    const reviewerEmail = uniqueEmail("my-feedback-reviewer");
     const reviewerRegistration = await request(app).post("/api/auth/register").send({
       fullName: "My Feedback Reviewer",
-      email: "my-feedback-reviewer@example.com",
+      email: reviewerEmail,
       password: "Password123",
     });
+    expect(reviewerRegistration.status).toBe(201);
     const reviewerCookie = reviewerRegistration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", requesterCookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+    const requesterJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", requesterCookie);
+    const reviewerJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", reviewerCookie);
+    expect(requesterJoin.status).toBe(200);
+    expect(reviewerJoin.status).toBe(200);
 
     const reviewRequestResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/resume-reviews`)
       .set("Cookie", requesterCookie)
       .send({ title: "My Feedback Resume", ...sampleResumePayload });
+    expect(reviewRequestResponse.status).toBe(201);
 
     const reviewRequestId = reviewRequestResponse.body.reviewRequest.id;
 
-    await request(app)
+    const reviewerFeedbackResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/feedback`)
       .set("Cookie", reviewerCookie)
       .send({
         strengths: "Solid formatting and structure.",
         improvements: "Add quantified outcomes to top bullets.",
       });
+    
+    expect(reviewerFeedbackResponse.status).toBe(200);
 
     const myFeedbackResponse = await request(app)
       .get(`/api/pods/${publicPod.id}/resume-reviews/${reviewRequestId}/my-feedback`)
       .set("Cookie", reviewerCookie);
 
     expect(myFeedbackResponse.status).toBe(200);
-    expect(myFeedbackResponse.body.feedback.reviewer.email).toBe("my-feedback-reviewer@example.com");
+    expect(myFeedbackResponse.body.feedback.reviewer.email).toBe(reviewerEmail);
     expect(myFeedbackResponse.body.feedback.strengths).toContain("Solid formatting");
   }, 15000);
 
   it("supports core bi-weekly ritual endpoints", async () => {
+    const ritualEmail = uniqueEmail("ritual-member");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Ritual Member",
-      email: "ritual-member@example.com",
+      email: ritualEmail,
       password: "Password123",
     });
+    expect(registration.status).toBe(201);
     const cookie = registration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+    const joinResponse = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+    expect(joinResponse.status).toBe(200);
 
     const currentResponse = await request(app)
       .get(`/api/pods/${publicPod.id}/checkin/current`)
@@ -1175,27 +1235,26 @@ describe("Pod Endpoints", () => {
 
     expect(statsResponse.status).toBe(200);
     expect(statsResponse.body.currentWeek.total_checkins).toBeGreaterThanOrEqual(1);
-  });
+  }, 15000);
 
   it("lists notifications and marks one as read", async () => {
+    const notificationEmail = uniqueEmail("notification-member");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Notification Member",
-      email: "notification-member@example.com",
+      email: notificationEmail,
       password: "Password123",
     });
+    expect(registration.status).toBe(201);
     const cookie = registration.headers["set-cookie"];
+    const registeredUserId = registration.body.user.id;
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
-
-    const user = await prisma.user.findUnique({
-      where: { email: "notification-member@example.com" },
-      select: { id: true },
-    });
 
     const notification = await prisma.notification.create({
       data: {
-        userId: user.id,
+        userId: registeredUserId,
         podId: publicPod.id,
         type: "PHASE_REMINDER",
         title: "Ritual Reminder",
@@ -1235,26 +1294,33 @@ describe("Pod Endpoints", () => {
   });
 
   it("creates nudges, creates a receiver notification, and returns accountability history", async () => {
+    const senderEmail = uniqueEmail("nudge-sender");
     const senderRegistration = await request(app).post("/api/auth/register").send({
       fullName: "Nudge Sender",
-      email: "nudge-sender@example.com",
+      email: senderEmail,
       password: "Password123",
     });
+    expect(senderRegistration.status).toBe(201);
+    const receiverEmail = uniqueEmail("nudge-receiver");
     const receiverRegistration = await request(app).post("/api/auth/register").send({
       fullName: "Nudge Receiver",
-      email: "nudge-receiver@example.com",
+      email: receiverEmail,
       password: "Password123",
     });
+    expect(receiverRegistration.status).toBe(201);
 
     const senderCookie = senderRegistration.headers["set-cookie"];
     const receiverCookie = receiverRegistration.headers["set-cookie"];
     const receiverId = receiverRegistration.body.user.id;
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", senderCookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", senderCookie);
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", receiverCookie);
+    const senderJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", senderCookie);
+    const receiverJoin = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", receiverCookie);
+    expect(senderJoin.status).toBe(200);
+    expect(receiverJoin.status).toBe(200);
 
     const sendNudgeResponse = await request(app)
       .post(`/api/pods/${publicPod.id}/nudges`)
@@ -1323,7 +1389,7 @@ describe("Pod Endpoints", () => {
 
     expect(senderNotificationsResponse.status).toBe(200);
     const replyNotification = senderNotificationsResponse.body.notifications.find(
-      (item) => item.type === "NUDGE_REPLIED" && item.sender?.email === "nudge-receiver@example.com",
+      (item) => item.type === "NUDGE_REPLIED" && item.sender?.id === receiverId,
     );
     expect(replyNotification).toBeTruthy();
 
@@ -1339,17 +1405,21 @@ describe("Pod Endpoints", () => {
   }, 15000);
 
   it("updates pod quiet mode through accountability endpoint", async () => {
+    const quietEmail = uniqueEmail("quiet-mode-user");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Quiet Mode User",
-      email: "quiet-mode-user@example.com",
+      email: quietEmail,
       password: "Password123",
     });
+    expect(registration.status).toBe(201);
     const cookie = registration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
-    await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+    const joinResponse = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+    expect(joinResponse.status).toBe(200);
 
     const enableResponse = await request(app)
       .put(`/api/pods/${publicPod.id}/accountability/quiet-mode`)
@@ -1381,14 +1451,17 @@ describe("Pod Endpoints", () => {
   });
 
   it("returns detailed pod payload for a valid pod id", async () => {
+    const podDetailEmail = uniqueEmail("pod-detail-member");
     const registration = await request(app).post("/api/auth/register").send({
       fullName: "Pod Detail Member",
-      email: "pod-detail-member@example.com",
+      email: podDetailEmail,
       password: "Password123",
     });
+    expect(registration.status).toBe(201);
     const cookie = registration.headers["set-cookie"];
 
     const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
     const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
 
     const detailResponse = await request(app).get(`/api/pods/${publicPod.id}`).set("Cookie", cookie);
@@ -1397,27 +1470,152 @@ describe("Pod Endpoints", () => {
     expect(detailResponse.body.pod.id).toBe(publicPod.id);
     expect(detailResponse.body.pod).toHaveProperty("memberCount");
   });
+
+  it("lists content-backed biweekly periods and enforces no generation for expired windows", async () => {
+    const summaryMemberEmail = uniqueEmail("summary-member");
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Summary Member",
+      email: summaryMemberEmail,
+      password: "Password123",
+    });
+    expect(registration.status).toBe(201);
+    const cookie = registration.headers["set-cookie"];
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    expect(podsResponse.status).toBe(200);
+    const publicPod = podsResponse.body.pods.find((pod) => pod.visibility === "PUBLIC");
+
+    await prisma.pod.update({
+      where: { id: publicPod.id },
+      data: {
+        createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const joinResponse = await request(app).post(`/api/pods/${publicPod.id}/join`).set("Cookie", cookie);
+    expect(joinResponse.status).toBe(200);
+
+    const postResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/posts`)
+      .set("Cookie", cookie)
+      .send({ content: "Current period progress update for AI summary." });
+    
+    expect(postResponse.status).toBe(201);
+
+    const oldDate = new Date();
+    oldDate.setDate(oldDate.getDate() - 20);
+
+    await prisma.podPost.create({
+      data: {
+        podId: publicPod.id,
+        authorId: registration.body.user.id,
+        content: "Old period content to create an expired summary period.",
+        createdAt: oldDate,
+      },
+    });
+
+    const periodsResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/biweekly-summaries/periods`)
+      .set("Cookie", cookie);
+
+    expect(periodsResponse.status).toBe(200);
+    expect(Array.isArray(periodsResponse.body.periods)).toBe(true);
+    expect(periodsResponse.body.periods.length).toBeGreaterThanOrEqual(2);
+
+    const activePeriod = periodsResponse.body.periods.find((period) => period.isActive);
+    const expiredPeriod = periodsResponse.body.periods.find((period) => period.isExpired);
+
+    expect(activePeriod).toBeTruthy();
+    expect(expiredPeriod).toBeTruthy();
+
+    const blockedExpiredGenerateResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/biweekly-summaries/generate`)
+      .set("Cookie", cookie)
+      .send({ windowStartAt: expiredPeriod.windowStartAt });
+
+    expect(blockedExpiredGenerateResponse.status).toBe(409);
+
+    const generatedActiveResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/biweekly-summaries/generate`)
+      .set("Cookie", cookie)
+      .send({ windowStartAt: activePeriod.windowStartAt });
+
+    expect(generatedActiveResponse.status).toBe(201);
+    expect(generatedActiveResponse.body.generated).toBe(true);
+    expect(generatedActiveResponse.body.summary.summaryText.length).toBeGreaterThan(10);
+
+    const fetchSummaryResponse = await request(app)
+      .get(`/api/pods/${publicPod.id}/biweekly-summaries`)
+      .set("Cookie", cookie)
+      .query({ windowStartAt: activePeriod.windowStartAt });
+
+    expect(fetchSummaryResponse.status).toBe(200);
+    expect(fetchSummaryResponse.body.summary.windowStartAt).toBe(activePeriod.windowStartAt);
+
+    const regeneratedResponse = await request(app)
+      .post(`/api/pods/${publicPod.id}/biweekly-summaries/generate`)
+      .set("Cookie", cookie)
+      .send({ windowStartAt: activePeriod.windowStartAt });
+
+    expect(regeneratedResponse.status).toBe(201);
+    expect(regeneratedResponse.body.generated).toBe(true);
+  }, 15000);
+
+  it("rejects generation for windows before pod creation period", async () => {
+    const summaryCreatorEmail = uniqueEmail("summary-creator");
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Summary Creator",
+      email: summaryCreatorEmail,
+      password: "Password123",
+    });
+    expect(registration.status).toBe(201);
+    const cookie = registration.headers["set-cookie"];
+
+    const createdPodResponse = await request(app)
+      .post("/api/pods")
+      .set("Cookie", cookie)
+      .send({
+        name: "Summary Guardrail Pod",
+        description: "Pod to verify summary period guardrails for generation requests.",
+        focusArea: "Career",
+        visibility: "PUBLIC",
+      });
+
+    expect(createdPodResponse.status).toBe(201);
+    const createdAt = new Date(createdPodResponse.body.pod.createdAt);
+    const podStart = getBiWeeklyStartDate(createdAt);
+    const invalidStart = new Date(podStart);
+    invalidStart.setDate(invalidStart.getDate() - 14);
+
+    const responseBeforeCreation = await request(app)
+      .post(`/api/pods/${createdPodResponse.body.pod.id}/biweekly-summaries/generate`)
+      .set("Cookie", cookie)
+      .send({ windowStartAt: invalidStart.toISOString() });
+
+    expect(responseBeforeCreation.status).toBe(400);
+  });
 });
 
 describe("Accountability Data Models", () => {
   async function createBaseEntities() {
+    const suffix = uniqueSuffix();
     const fromUser = await prisma.user.create({
       data: {
-        email: "nudge-from@example.com",
+        email: `nudge-from-${suffix}@example.com`,
         authProvider: "LOCAL",
       },
     });
 
     const toUser = await prisma.user.create({
       data: {
-        email: "nudge-to@example.com",
+        email: `nudge-to-${suffix}@example.com`,
         authProvider: "LOCAL",
       },
     });
 
     const pod = await prisma.pod.create({
       data: {
-        slug: "nudge-test-pod",
+        slug: `nudge-test-pod-${suffix}`,
         name: "Nudge Test Pod",
         description: "Pod used for accountability data model tests.",
         focusArea: "Accountability",
