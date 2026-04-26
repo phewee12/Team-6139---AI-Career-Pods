@@ -106,6 +106,7 @@ model User {
   resumeReviewRequests      PodResumeReviewRequest[]  @relation("ResumeRequestOwner")
   engagementMetrics         EngagementMetrics[]
   engagementScores          EngagementScores[]
+  generatedBiweeklySummaries PodBiweeklySummary[]      @relation("PodBiweeklySummaryGeneratedBy")
 
   @@index([fieldOfStudy])
   @@index([careerStage])
@@ -138,10 +139,30 @@ model Pod {
   accountabilityMetrics AccountabilityMetric[]
   engagementMetrics     EngagementMetrics[]
   engagementScores      EngagementScores[]
+  biweeklySummaries     PodBiweeklySummary[]
 
   @@index([focusArea])
   @@index([visibility])
   @@index([createdById])
+}
+
+model PodBiweeklySummary {
+  id           String   @id @default(uuid())
+  podId        String
+  windowStartAt DateTime
+  windowEndAt  DateTime
+  summaryText  String   @db.Text
+  sourceCounts Json?
+  generatedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pod         Pod   @relation(fields: [podId], references: [id], onDelete: Cascade)
+  generatedBy User? @relation("PodBiweeklySummaryGeneratedBy", fields: [generatedById], references: [id], onDelete: SetNull)
+
+  @@unique([podId, windowStartAt])
+  @@index([podId, windowStartAt])
+  @@index([generatedById])
 }
 
 model PodPost {

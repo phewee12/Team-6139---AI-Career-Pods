@@ -21,6 +21,7 @@ import CelebrationFeed from "../components/CelebrationFeed";
 import NotificationBell from "../components/NotificationBell";
 import ResumeReviewPanel from "../components/ResumeReviewPanel";
 import EngagementScore from "../components/EngagementScore";
+import BiweeklySummaryPanel from "../components/BiweeklySummaryPanel";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -1155,6 +1156,7 @@ export default function DashboardPage({ user, onLogout }) {
     const featureNavItems = [
       { id: "feed", label: "Feed", icon: "message" },
       { id: "biweekly", label: "Bi-Weekly Progress", icon: "calendar" },
+      { id: "summary", label: "Bi-Weekly AI Summary", icon: "sparkles" },
       { id: "resume", label: "Resume Review", icon: "briefcase" },
       { id: "members", label: "Members", icon: "users" },
     ];
@@ -1182,6 +1184,10 @@ export default function DashboardPage({ user, onLogout }) {
             isAdmin={activeGroup.membershipRole === "ADMIN" || activeGroup.membershipRole === "OWNER"}
           />
         );
+      }
+
+      if (activeGroupFeature === "summary") {
+        return <BiweeklySummaryPanel podId={activeGroup.id} />;
       }
 
       if (activeGroupFeature === "members") {

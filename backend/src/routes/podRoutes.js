@@ -21,7 +21,16 @@ import {
   generateStructuredFeedbackSuggestionsFromPdf,
   generateFeedbackSummary,
 } from "../services/resumeService.js";
-import { updateEngagementMetrics } from "../services/engagementService.js";
+import {
+  updateEngagementMetrics,
+  getEngagementScore,
+  getEngagementHistory,
+} from "../services/engagementService.js";
+import {
+  buildSourceCounts,
+  generateBiweeklySummary,
+  hasSummarySourceContent,
+} from "../services/biweeklySummaryService.js";
 
 const router = Router();
 
@@ -31,6 +40,37 @@ function getBiWeeklyStartDate(date) {
   const daysSinceEpoch = Math.floor(d.getTime() / (1000 * 60 * 60 * 24));
   const biWeeklyOffset = daysSinceEpoch % 14;
   d.setDate(d.getDate() - biWeeklyOffset);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getBiWeeklyWindowEndDate(windowStartDate) {
+  const end = new Date(windowStartDate);
+  end.setDate(end.getDate() + 13);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+function getNextBiWeeklyWindowStartDate(windowStartDate) {
+  const next = new Date(windowStartDate);
+  next.setDate(next.getDate() + 14);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function getBiWeeklyWindowKey(date) {
+  return getBiWeeklyStartDate(date).toISOString();
+}
+
+function isSameBiWeeklyWindow(a, b) {
+  return getBiWeeklyStartDate(a).getTime() === getBiWeeklyStartDate(b).getTime();
+}
+
+function getWeekStartDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d;
 }
@@ -115,6 +155,14 @@ const quietModeSchema = z.object({
   enabled: z.boolean(),
   until: z.string().datetime().nullable().optional(),
   announcedToPod: z.boolean().optional(),
+});
+
+const biweeklySummaryPeriodQuerySchema = z.object({
+  windowStartAt: z.string().datetime(),
+});
+
+const biweeklySummaryGenerateSchema = z.object({
+  windowStartAt: z.string().datetime(),
 });
 
 const NUDGE_QUICK_REPLY_ID_TO_ENUM = {
@@ -291,6 +339,218 @@ async function getPodAccessContext(podId, userId) {
     exists: true,
     isActiveMember,
     isAdmin,
+  };
+}
+
+async function getPodWithMemberAccess(podId, userId) {
+  const pod = await prisma.pod.findUnique({
+    where: { id: podId },
+    select: {
+      id: true,
+      name: true,
+      createdAt: true,
+      memberships: {
+        where: {
+          userId,
+          status: "ACTIVE",
+        },
+        select: {
+          id: true,
+        },
+        take: 1,
+      },
+    },
+  });
+
+  if (!pod) {
+    return { exists: false, pod: null, isActiveMember: false };
+  }
+
+  return {
+    exists: true,
+    pod,
+    isActiveMember: pod.memberships.length > 0,
+  };
+}
+
+function createEmptyWindowCounts() {
+  return {
+    checkIns: 0,
+    reflections: 0,
+    celebrations: 0,
+    posts: 0,
+  };
+}
+
+async function getContentBackedWindowCounts(podId, podCreatedAt) {
+  const earliestWindowStart = getBiWeeklyStartDate(podCreatedAt);
+
+  const [checkIns, reflections, celebrations, posts] = await Promise.all([
+    prisma.podCheckIn.findMany({
+      where: {
+        podId,
+        weekStartDate: {
+          gte: earliestWindowStart,
+        },
+      },
+      select: {
+        weekStartDate: true,
+      },
+    }),
+    prisma.podReflection.findMany({
+      where: {
+        podId,
+        weekStartDate: {
+          gte: earliestWindowStart,
+        },
+      },
+      select: {
+        weekStartDate: true,
+      },
+    }),
+    prisma.podCelebration.findMany({
+      where: {
+        podId,
+        weekStartDate: {
+          gte: earliestWindowStart,
+        },
+      },
+      select: {
+        weekStartDate: true,
+      },
+    }),
+    prisma.podPost.findMany({
+      where: {
+        podId,
+        createdAt: {
+          gte: podCreatedAt,
+        },
+      },
+      select: {
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  const countsByWindow = new Map();
+
+  const ensureWindow = (date) => {
+    const key = getBiWeeklyWindowKey(date);
+    if (!countsByWindow.has(key)) {
+      countsByWindow.set(key, createEmptyWindowCounts());
+    }
+
+    return countsByWindow.get(key);
+  };
+
+  checkIns.forEach((entry) => {
+    const counts = ensureWindow(entry.weekStartDate);
+    counts.checkIns += 1;
+  });
+
+  reflections.forEach((entry) => {
+    const counts = ensureWindow(entry.weekStartDate);
+    counts.reflections += 1;
+  });
+
+  celebrations.forEach((entry) => {
+    const counts = ensureWindow(entry.weekStartDate);
+    counts.celebrations += 1;
+  });
+
+  posts.forEach((entry) => {
+    const counts = ensureWindow(entry.createdAt);
+    counts.posts += 1;
+  });
+
+  return countsByWindow;
+}
+
+function toBiweeklySummaryResponse(summary) {
+  return {
+    id: summary.id,
+    podId: summary.podId,
+    windowStartAt: summary.windowStartAt,
+    windowEndAt: summary.windowEndAt,
+    summaryText: summary.summaryText,
+    sourceCounts: summary.sourceCounts || null,
+    generatedById: summary.generatedById || null,
+    createdAt: summary.createdAt,
+    updatedAt: summary.updatedAt,
+  };
+}
+
+async function getBiweeklyArtifactsForWindow(podId, windowStartAt, windowEndAt) {
+  const nextWindowStart = getNextBiWeeklyWindowStartDate(windowStartAt);
+
+  const [checkIns, reflections, celebrations, posts] = await Promise.all([
+    prisma.podCheckIn.findMany({
+      where: {
+        podId,
+        weekStartDate: windowStartAt,
+      },
+      include: {
+        user: true,
+      },
+      orderBy: [{ createdAt: "asc" }],
+    }),
+    prisma.podReflection.findMany({
+      where: {
+        podId,
+        weekStartDate: windowStartAt,
+      },
+      include: {
+        user: true,
+      },
+      orderBy: [{ createdAt: "asc" }],
+    }),
+    prisma.podCelebration.findMany({
+      where: {
+        podId,
+        weekStartDate: windowStartAt,
+      },
+      include: {
+        user: true,
+      },
+      orderBy: [{ createdAt: "asc" }],
+    }),
+    prisma.podPost.findMany({
+      where: {
+        podId,
+        createdAt: {
+          gte: windowStartAt,
+          lt: nextWindowStart,
+        },
+      },
+      include: {
+        author: true,
+      },
+      orderBy: [{ createdAt: "asc" }],
+      take: 80,
+    }),
+  ]);
+
+  return {
+    windowStartAt,
+    windowEndAt,
+    checkIns: checkIns.map((item) => ({
+      userName: item.user.fullName || item.user.email,
+      notes: item.notes || "",
+      goals: item.goals || "",
+    })),
+    reflections: reflections.map((item) => ({
+      userName: item.user.fullName || item.user.email,
+      content: item.content,
+    })),
+    celebrations: celebrations.map((item) => ({
+      userName: item.user.fullName || item.user.email,
+      title: item.title,
+      description: item.description,
+    })),
+    posts: posts.map((item) => ({
+      userName: item.author.fullName || item.author.email,
+      content: item.content,
+    })),
   };
 }
 
@@ -1674,6 +1934,207 @@ router.delete("/:podId/resume-reviews/:requestId", requireAuth, async (request, 
     return response.status(200).json({ message: "Resume review request deleted." });
   } catch (error) {
     return response.status(500).json({ message: "Failed to delete resume review request." });
+  }
+});
+
+router.get("/:podId/biweekly-summaries/periods", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const access = await getPodWithMemberAccess(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const windowCounts = await getContentBackedWindowCounts(podId, access.pod.createdAt);
+    const windowStarts = Array.from(windowCounts.keys())
+      .map((value) => new Date(value))
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    if (windowStarts.length === 0) {
+      return response.status(200).json({ periods: [] });
+    }
+
+    const summaries = await prisma.podBiweeklySummary.findMany({
+      where: {
+        podId,
+        windowStartAt: {
+          in: windowStarts,
+        },
+      },
+      select: {
+        id: true,
+        windowStartAt: true,
+        createdAt: true,
+      },
+    });
+
+    const summaryByWindow = new Map(summaries.map((item) => [item.windowStartAt.toISOString(), item]));
+    const now = new Date();
+    const currentWindowStart = getBiWeeklyStartDate(now);
+
+    const periods = windowStarts.map((windowStartAt) => {
+      const windowKey = windowStartAt.toISOString();
+      const summary = summaryByWindow.get(windowKey) || null;
+      const windowEndAt = getBiWeeklyWindowEndDate(windowStartAt);
+      const isActive = isSameBiWeeklyWindow(now, windowStartAt);
+      const isExpired = !isActive;
+
+      return {
+        windowStartAt,
+        windowEndAt,
+        isActive,
+        isExpired,
+        hasSummary: Boolean(summary),
+        canGenerate: isSameBiWeeklyWindow(windowStartAt, currentWindowStart),
+        sourceCounts: windowCounts.get(windowKey) || createEmptyWindowCounts(),
+        summaryId: summary?.id || null,
+        summaryCreatedAt: summary?.createdAt || null,
+      };
+    });
+
+    return response.status(200).json({ periods });
+  } catch (error) {
+    return response.status(500).json({ message: "Failed to load biweekly summary periods." });
+  }
+});
+
+router.get("/:podId/biweekly-summaries", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const access = await getPodWithMemberAccess(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const { windowStartAt } = biweeklySummaryPeriodQuerySchema.parse(request.query);
+    const parsedWindowStart = new Date(windowStartAt);
+    const normalizedWindowStart = getBiWeeklyStartDate(parsedWindowStart);
+
+    if (!isSameBiWeeklyWindow(parsedWindowStart, normalizedWindowStart)) {
+      return response.status(400).json({ message: "windowStartAt must align to a biweekly window start." });
+    }
+
+    if (normalizedWindowStart < getBiWeeklyStartDate(access.pod.createdAt)) {
+      return response.status(400).json({ message: "windowStartAt cannot be before pod creation period." });
+    }
+
+    const summary = await prisma.podBiweeklySummary.findUnique({
+      where: {
+        podId_windowStartAt: {
+          podId,
+          windowStartAt: normalizedWindowStart,
+        },
+      },
+    });
+
+    if (!summary) {
+      return response.status(404).json({ message: "Biweekly summary not found for this period." });
+    }
+
+    return response.status(200).json({ summary: toBiweeklySummaryResponse(summary) });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid biweekly summary query.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to load biweekly summary." });
+  }
+});
+
+router.post("/:podId/biweekly-summaries/generate", requireAuth, async (request, response) => {
+  try {
+    const { podId } = request.params;
+    const access = await getPodWithMemberAccess(podId, request.user.id);
+
+    if (!access.exists) {
+      return response.status(404).json({ message: "Pod not found." });
+    }
+
+    if (!access.isActiveMember) {
+      return response.status(403).json({ message: "Active membership required." });
+    }
+
+    const payload = biweeklySummaryGenerateSchema.parse(request.body);
+    const parsedWindowStart = new Date(payload.windowStartAt);
+    const normalizedWindowStart = getBiWeeklyStartDate(parsedWindowStart);
+
+    if (!isSameBiWeeklyWindow(parsedWindowStart, normalizedWindowStart)) {
+      return response.status(400).json({ message: "windowStartAt must align to a biweekly window start." });
+    }
+
+    if (normalizedWindowStart < getBiWeeklyStartDate(access.pod.createdAt)) {
+      return response.status(400).json({ message: "windowStartAt cannot be before pod creation period." });
+    }
+
+    const now = new Date();
+    if (!isSameBiWeeklyWindow(now, normalizedWindowStart)) {
+      return response.status(409).json({ message: "Cannot generate summaries for expired periods." });
+    }
+
+    const existingSummary = await prisma.podBiweeklySummary.findUnique({
+      where: {
+        podId_windowStartAt: {
+          podId,
+          windowStartAt: normalizedWindowStart,
+        },
+      },
+    });
+
+    const windowEndAt = getBiWeeklyWindowEndDate(normalizedWindowStart);
+    const artifacts = await getBiweeklyArtifactsForWindow(podId, normalizedWindowStart, windowEndAt);
+
+    if (!hasSummarySourceContent(artifacts)) {
+      return response.status(400).json({ message: "No summary content is available for this period yet." });
+    }
+
+    const summaryText = await generateBiweeklySummary({
+      podName: access.pod.name,
+      windowStartAt: normalizedWindowStart,
+      windowEndAt,
+      artifacts,
+    });
+
+    const summary = existingSummary
+      ? await prisma.podBiweeklySummary.update({
+          where: { id: existingSummary.id },
+          data: {
+            windowEndAt,
+            summaryText,
+            sourceCounts: buildSourceCounts(artifacts),
+            generatedById: request.user.id,
+          },
+        })
+      : await prisma.podBiweeklySummary.create({
+          data: {
+            podId,
+            windowStartAt: normalizedWindowStart,
+            windowEndAt,
+            summaryText,
+            sourceCounts: buildSourceCounts(artifacts),
+            generatedById: request.user.id,
+          },
+        });
+
+    return response.status(201).json({
+      summary: toBiweeklySummaryResponse(summary),
+      generated: true,
+    });
+  } catch (error) {
+    if (error?.name === "ZodError") {
+      return response.status(400).json({ message: "Invalid biweekly summary payload.", issues: error.issues });
+    }
+
+    return response.status(500).json({ message: "Failed to generate biweekly summary." });
   }
 });
 
