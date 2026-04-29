@@ -25,6 +25,7 @@ import {
   updateEngagementMetrics,
   getEngagementScore,
   getEngagementHistory,
+  getMetricValue
 } from "../services/engagementService.js";
 import {
   buildSourceCounts,
