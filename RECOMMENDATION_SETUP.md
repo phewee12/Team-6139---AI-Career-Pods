@@ -1,3 +1,7 @@
+**Audience:** This document is intended for developers and future maintainers
+who need to implement the resume feedback visibility fix. End users do not
+need to read this document.
+
 ## Plan: Resume Feedback Visibility + Formatting
 
 Fix the requester feedback visibility bug by correcting selected-request precedence in the resume panel, then standardize feedback card formatting to show labeled fields and score out of 5 while removing redundant instructional text.
