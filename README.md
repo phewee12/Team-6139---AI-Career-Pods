@@ -1,5 +1,8 @@
 ﻿# AI Career Pods (Qwyse)
 
+**Current Version:** 1.0.0
+**Release Date:** April 28, 2026
+
 AI Career Pods is a monorepo for the Qwyse platform.
 
 ## Tech Stack
