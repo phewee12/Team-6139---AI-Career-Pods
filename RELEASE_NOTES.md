@@ -8,12 +8,13 @@ Instructors and future maintainers may also reference this document.
 **Project:** Qwyse - AI Career Pods Platform  
 **Release Type:** First Production Release
 
-## Current Release
+## Table of Contents
 
-**Version:** 1.0.0
-**Release Date:** April 28, 2026
-
-See [RELEASE_NOTES.md](./RELEASE_NOTES.md) for complete details.
+- [New Features](#new-features)
+- [Bug Fixes](#bug-fixes)
+- [Known Issues](#known-issues)
+- [Upgrade Notes](#upgrade-notes)
+- [Compatibility](#compatibility)
 
 ## New Features
 
