@@ -1,3 +1,7 @@
+**Audience:** This document is intended for Qwyse platform users and administrators
+who need to understand what's new in this release or install the application.
+Instructors and future maintainers may also reference this document.
+
 # Release Notes v1.0.0
 
 **Release Date:** April 28, 2026  
