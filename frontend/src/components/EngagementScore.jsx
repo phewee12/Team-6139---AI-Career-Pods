@@ -51,7 +51,36 @@ export default function EngagementScore({ podId }) {
     if (error || !engagement) {
         return (
             <div className="engagement-card">
-                <p className="helper-copy">Complete more activities to see your engagement score.</p>
+                <div className="engagement-header">
+                    <div className="engagement-title">
+                        <span className="engagement-icon">🌱</span>
+                        <h3>Your Engagement Score</h3>
+                    </div>
+                </div>
+
+                <div className="score-container">
+                    <div className="score-value">
+                        <span className="score-number">0</span>
+                        <span className="score-max">/100</span>
+                    </div>
+                    <div className="score-label" style={{ color: "#f59e0b" }}>
+                        Getting Started
+                    </div>
+                </div>
+
+                <div className="progress-bar-container">
+                    <div
+                        className="progress-bar-fill"
+                        style={{
+                            width: "0%",
+                            backgroundColor: "#f59e0b"
+                        }}
+                    />
+                </div>
+
+                <p className="score-description">
+                    Complete check-ins, reflections, and other activities to build your engagement score.
+                </p>
             </div>
         );
     }
