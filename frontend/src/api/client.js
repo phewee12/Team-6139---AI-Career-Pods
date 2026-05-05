@@ -105,6 +105,8 @@ function clearPodCache(podId) {
     `/pods/${podId}/stats`,
     `/pods/${podId}/celebrations/all`,
     `/pods/${podId}/posts`,
+    `/pods/${podId}/feed`,  // Added: clear feed cache
+    `/pods/${podId}/trending`,  // Added: clear trending cache
     `/pods/${podId}/accountability`,
     `/pods/${podId}/biweekly-summaries/periods`,
     "/pods",
@@ -268,14 +270,135 @@ export async function getPodPosts(podId) {
 export async function createPodPost(podId, input) {
   const result = await request(`/pods/${podId}/posts`, { method: "POST", body: input });
   clearCache(`/pods/${podId}/posts`);
+  clearCache(`/pods/${podId}/feed`); // Clear feed cache when new post created
   return result;
 }
 
 export async function deletePodPost(podId, postId) {
   const result = await request(`/pods/${podId}/posts/${postId}`, { method: "DELETE" });
   clearCache(`/pods/${podId}/posts`);
+  clearCache(`/pods/${podId}/feed`); // Clear feed cache when post deleted
   return result;
 }
+
+// ============================================
+// NEW SOCIAL FEED API FUNCTIONS
+// ============================================
+
+/**
+ * Get paginated feed posts with sorting and filtering
+ * @param {string} podId - The pod ID
+ * @param {Object} options - Query options
+ * @param {string} options.sort - 'recent', 'trending', or 'recommended'
+ * @param {number} options.page - Page number (1-indexed)
+ * @param {number} options.limit - Posts per page
+ * @param {array} options.tags - Filter by tags
+ */
+export async function getFeedPosts(podId, { sort = 'recent', page = 1, limit = 10, tags = [] } = {}) {
+  const params = new URLSearchParams({ 
+    sort, 
+    page: page.toString(), 
+    limit: limit.toString() 
+  });
+  
+  if (tags.length) {
+    params.append('tags', tags.join(','));
+  }
+  
+  const cacheKey = `/pods/${podId}/feed?${params.toString()}`;
+  
+  // Use shorter cache for trending/recommended, longer for recent
+  const ttl = sort === 'recent' ? 15000 : 30000;
+  
+  return requestCached(cacheKey, ttl);
+}
+
+/**
+ * Create a new post in the feed
+ * @param {string} podId - The pod ID
+ * @param {Object} input - Post data
+ * @param {string} input.title - Post title
+ * @param {string} input.content - Post content
+ * @param {array} input.tags - Array of tags
+ * @param {string} input.mediaUrl - Optional media URL
+ */
+export async function createPost(podId, input) {
+  const result = await request(`/pods/${podId}/posts`, { 
+    method: "POST", 
+    body: input 
+  });
+  
+  // Clear all feed caches for this pod
+  clearCache(`/pods/${podId}/feed`);
+  clearCache(`/pods/${podId}/trending`);
+  
+  return result;
+}
+
+
+
+/**
+ * Share a post
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ */
+export async function sharePost(podId, postId) {
+  const result = await request(`/pods/${podId}/posts/${postId}/share`, { 
+    method: "POST" 
+  });
+  
+  clearCache(`/pods/${podId}/feed`);
+  
+  return result;
+}
+
+/**
+ * Get comments for a post
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ * @param {number} page - Page number
+ */
+export async function getComments(podId, postId, page = 1) {
+  return requestCached(`/pods/${podId}/posts/${postId}/comments?page=${page}`, 15000);
+}
+
+/**
+ * Add a comment to a post
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ * @param {string} content - Comment content
+ */
+export async function addComment(podId, postId, content) {
+  const result = await request(`/pods/${podId}/posts/${postId}/comments`, {
+    method: "POST",
+    body: { content }
+  });
+  
+  clearCache(`/pods/${podId}/posts/${postId}/comments`);
+  clearCache(`/pods/${podId}/feed`); // Update feed to show new comment count
+  
+  return result;
+}
+
+/**
+ * Get trending topics for a pod
+ * @param {string} podId - The pod ID
+ */
+export async function getTrendingTopics(podId) {
+  return requestCached(`/pods/${podId}/trending`, 30000);
+}
+
+/**
+ * Get recommended posts for a user based on engagement
+ * @param {string} podId - The pod ID
+ */
+export async function getRecommendedPosts(podId) {
+  return requestCached(`/pods/${podId}/feed/recommended`, 60000);
+}
+
+// ============================================
+// END SOCIAL FEED API FUNCTIONS
+// ============================================
 
 export function getGoogleAuthUrl() {
   return `${SERVER_URL}/api/auth/google`;
@@ -457,6 +580,8 @@ export function prefetchPodFeatureData(podId) {
     getPodStats(podId),
     getPodCelebrations(podId),
     getPodPosts(podId),
+    getFeedPosts(podId, { sort: 'recent', page: 1, limit: 5 }), // Prefetch first page of feed
+    getTrendingTopics(podId), // Prefetch trending
     getResumeReviewRequests(podId),
     getPodMembers(podId),
     getBiweeklySummaryPeriods(podId),
@@ -482,3 +607,67 @@ export async function resetTestDatabase(confirmText) {
     body: { confirmText },
   });
 }
+
+
+/**
+ * Like a post with proper error handling
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ */
+export async function likePost(podId, postId) {
+  console.log(`Liking post ${postId} in pod ${podId}`);
+  const result = await request(`/pods/${podId}/posts/${postId}/like`, { 
+    method: "POST" 
+  });
+  
+  // Clear all relevant caches
+  clearCache(`/pods/${podId}/feed`);
+  clearCache(`/pods/${podId}/posts`);
+  
+  return result;
+}
+
+/**
+ * Unlike a post
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ */
+export async function unlikePost(podId, postId) {
+  console.log(`Unliking post ${postId} in pod ${podId}`);
+  const result = await request(`/pods/${podId}/posts/${postId}/like`, { 
+    method: "DELETE" 
+  });
+  
+  clearCache(`/pods/${podId}/feed`);
+  
+  return result;
+}
+
+/**
+ * Save a post (bookmark)
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ */
+export async function savePost(podId, postId) {
+  console.log(`Saving post ${postId} in pod ${podId}`);
+  const result = await request(`/pods/${podId}/posts/${postId}/save`, { 
+    method: "POST" 
+  });
+  clearCache(`/pods/${podId}/feed`);
+  return result;
+}
+
+/**
+ * Unsave a post
+ * @param {string} podId - The pod ID
+ * @param {string} postId - The post ID
+ */
+export async function unsavePost(podId, postId) {
+  console.log(`Unsaving post ${postId} in pod ${podId}`);
+  const result = await request(`/pods/${podId}/posts/${postId}/save`, { 
+    method: "DELETE" 
+  });
+  clearCache(`/pods/${podId}/feed`);
+  return result;
+}
+
