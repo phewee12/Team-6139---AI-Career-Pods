@@ -1,0 +1,45 @@
+export const FIELD_OF_STUDY_OPTIONS = [
+  { value: "Computer Science", label: "Computer Science" },
+  { value: "Computer Engineering", label: "Computer Engineering" },
+  { value: "Software Engineering", label: "Software Engineering" },
+  { value: "Information Technology", label: "Information Technology" },
+  { value: "Information Systems", label: "Information Systems" },
+  { value: "Data Science", label: "Data Science" },
+  { value: "Electrical Engineering", label: "Electrical Engineering" },
+  { value: "Mechanical Engineering", label: "Mechanical Engineering" },
+  { value: "Business", label: "Business" },
+  { value: "Marketing", label: "Marketing" },
+  { value: "Finance", label: "Finance" },
+  { value: "Psychology", label: "Psychology" },
+  { value: "Biology", label: "Biology" },
+  { value: "Human-Computer Interaction", label: "Human-Computer Interaction" },
+  { value: "Product Design", label: "Product Design" },
+  { value: "Other / Not Listed", label: "Other / Not Listed" },
+];
+
+export const CITY_OPTIONS = [
+  { value: "Atlanta, GA", label: "Atlanta, GA" },
+  { value: "Austin, TX", label: "Austin, TX" },
+  { value: "Boston, MA", label: "Boston, MA" },
+  { value: "Chicago, IL", label: "Chicago, IL" },
+  { value: "Dallas, TX", label: "Dallas, TX" },
+  { value: "Denver, CO", label: "Denver, CO" },
+  { value: "Los Angeles, CA", label: "Los Angeles, CA" },
+  { value: "Miami, FL", label: "Miami, FL" },
+  { value: "New York City, NY", label: "New York City, NY" },
+  { value: "Philadelphia, PA", label: "Philadelphia, PA" },
+  { value: "Phoenix, AZ", label: "Phoenix, AZ" },
+  { value: "Portland, OR", label: "Portland, OR" },
+  { value: "San Diego, CA", label: "San Diego, CA" },
+  { value: "San Francisco Bay Area, CA", label: "San Francisco Bay Area, CA" },
+  { value: "Seattle, WA", label: "Seattle, WA" },
+  { value: "Other / Not Listed", label: "Other / Not Listed" },
+];
+
+export const PREFERRED_GROUP_SIZE_OPTIONS = [
+  { value: "ANY", label: "Any size" },
+  { value: "NEW", label: "New groups" },
+  { value: "SMALL", label: "Small groups" },
+  { value: "MID", label: "Medium groups" },
+  { value: "LARGE", label: "Large groups" },
+];

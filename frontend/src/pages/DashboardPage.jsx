@@ -22,6 +22,7 @@ import NotificationBell from "../components/NotificationBell";
 import ResumeReviewPanel from "../components/ResumeReviewPanel";
 import EngagementScore from "../components/EngagementScore";
 import BiweeklySummaryPanel from "../components/BiweeklySummaryPanel";
+import { CITY_OPTIONS, FIELD_OF_STUDY_OPTIONS } from "../constants/recommendationOptions";
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -200,6 +201,9 @@ function enrichPods(pods) {
     const membershipStatus = pod.membershipStatus || null;
     const membershipRole = pod.membershipRole || null;
     const visibility = pod.visibility || "PUBLIC";
+    const recommendationScore = typeof pod.recommendationScore === "number" ? pod.recommendationScore : null;
+    const locationDistanceKm = typeof pod.locationDistanceKm === "number" ? pod.locationDistanceKm : null;
+    const recommendationReasons = Array.isArray(pod.recommendationReasons) ? pod.recommendationReasons : [];
 
     return {
       ...pod,
@@ -207,14 +211,18 @@ function enrichPods(pods) {
       members,
       size: deriveGroupSize(members),
       activity: visibility === "PRIVATE" ? "Private" : "Public",
-      category: pod.focusArea || "General",
-      tags: pod.focusArea ? [pod.focusArea] : [],
+      fieldOfStudy: pod.fieldOfStudy || "",
+      tags: pod.fieldOfStudy ? [pod.fieldOfStudy] : [],
+      locationCity: pod.locationCity || "",
       membershipStatus,
       membershipRole,
       joinActionLabel:
         pod.joinActionLabel || (visibility === "PRIVATE" ? "Request To Join" : "Join Group"),
       createdAt: formatMonthYear(pod.createdAt),
       visibility,
+      recommendationScore,
+      locationDistanceKm,
+      recommendationReasons,
       adminCount:
         pod.createdById || ((membershipRole === "OWNER" || membershipRole === "ADMIN") && membershipStatus === "ACTIVE")
           ? 1
@@ -270,7 +278,7 @@ export default function DashboardPage({ user, onLogout }) {
   const [activeGroupFeature, setActiveGroupFeature] = useState("feed");
   const [activeGroupId, setActiveGroupId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [fieldOfStudyFilter, setFieldOfStudyFilter] = useState("All");
   const [sizeFilter, setSizeFilter] = useState("All");
   const [activityFilter, setActivityFilter] = useState("All");
   const [feedTagFilter, setFeedTagFilter] = useState("All Posts");
@@ -298,7 +306,8 @@ export default function DashboardPage({ user, onLogout }) {
   const [groupFormValues, setGroupFormValues] = useState({
     name: "",
     description: "",
-    focusArea: "",
+    fieldOfStudy: "",
+    locationCity: "",
     visibility: "PUBLIC",
   });
   const [groupFormError, setGroupFormError] = useState("");
@@ -366,8 +375,8 @@ export default function DashboardPage({ user, onLogout }) {
     });
   }, [discoverGroups]);
 
-  const categoryOptions = useMemo(
-      () => ["All", ...new Set(discoverGroups.map((group) => group.category))],
+    const fieldOfStudyOptions = useMemo(
+      () => ["All", ...new Set(discoverGroups.map((group) => group.fieldOfStudy).filter(Boolean))],
       [discoverGroups],
   );
 
@@ -387,18 +396,18 @@ export default function DashboardPage({ user, onLogout }) {
     return discoverGroups.filter((group) => {
       const matchesSearch =
           normalizedSearch.length === 0 ||
-          [group.name, group.description, group.category, ...group.tags]
+          [group.name, group.description, group.fieldOfStudy]
               .join(" ")
               .toLowerCase()
               .includes(normalizedSearch);
 
-      const matchesCategory = categoryFilter === "All" || group.category === categoryFilter;
+        const matchesCategory = fieldOfStudyFilter === "All" || group.fieldOfStudy === fieldOfStudyFilter;
       const matchesSize = sizeFilter === "All" || group.size === sizeFilter;
       const matchesActivity = activityFilter === "All" || group.activity === activityFilter;
 
       return matchesSearch && matchesCategory && matchesSize && matchesActivity;
     });
-  }, [activityFilter, categoryFilter, discoverGroups, searchTerm, sizeFilter]);
+  }, [activityFilter, discoverGroups, fieldOfStudyFilter, searchTerm, sizeFilter]);
 
   const myGroups = useMemo(
       () =>
@@ -488,7 +497,8 @@ export default function DashboardPage({ user, onLogout }) {
     setGroupFormValues({
       name: "",
       description: "",
-      focusArea: "",
+      fieldOfStudy: "",
+      locationCity: "",
       visibility: "PUBLIC",
     });
   }
@@ -503,7 +513,8 @@ export default function DashboardPage({ user, onLogout }) {
     setGroupFormValues({
       name: activeGroup.name || "",
       description: activeGroup.description || "",
-      focusArea: activeGroup.focusArea || activeGroup.category || "",
+      fieldOfStudy: activeGroup.fieldOfStudy || "",
+      locationCity: activeGroup.locationCity || "",
       visibility: activeGroup.visibility || "PUBLIC",
     });
   }
@@ -528,12 +539,13 @@ export default function DashboardPage({ user, onLogout }) {
     const payload = {
       name: groupFormValues.name.trim(),
       description: groupFormValues.description.trim(),
-      focusArea: groupFormValues.focusArea.trim(),
+      fieldOfStudy: groupFormValues.fieldOfStudy.trim(),
+      locationCity: groupFormValues.locationCity.trim(),
       visibility: groupFormValues.visibility,
     };
 
-    if (!payload.name || !payload.description || !payload.focusArea) {
-      setGroupFormError("Please fill out name, description, and focus area.");
+    if (!payload.name || !payload.description) {
+      setGroupFormError("Please fill out name and description.");
       return;
     }
 
@@ -865,8 +877,8 @@ export default function DashboardPage({ user, onLogout }) {
                     <AppIcon name="filter"/>
                     <span>Filters:</span>
                   </div>
-                  <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                    {categoryOptions.map((option) => (
+                  <select value={fieldOfStudyFilter} onChange={(event) => setFieldOfStudyFilter(event.target.value)}>
+                    {fieldOfStudyOptions.map((option) => (
                         <option key={option} value={option}>
                           {option}
                         </option>
@@ -909,14 +921,14 @@ export default function DashboardPage({ user, onLogout }) {
                               <h2>{group.name}</h2>
                               <p>{group.description}</p>
 
-                              <div className="group-tags">
-                                {group.tags.slice(0, 4).map((tag) => (
-                                    <span key={tag} className="group-tag">
-                            <AppIcon name="tag"/>
-                                      {tag}
-                          </span>
-                                ))}
-                              </div>
+                              {group.fieldOfStudy && (
+                                  <div className="group-tags">
+                                    <span className="group-tag">
+                                      <AppIcon name="tag"/>
+                                      {group.fieldOfStudy}
+                                    </span>
+                                  </div>
+                              )}
 
                               <div className="group-footer">
                         <span className="member-pill">
@@ -924,6 +936,13 @@ export default function DashboardPage({ user, onLogout }) {
                           {group.members.toLocaleString()} members
                         </span>
                                 <span className="activity-pill">{group.activity}</span>
+                                {group.locationCity && <span className="activity-pill">{group.locationCity}</span>}
+                                {typeof group.locationDistanceKm === "number" && (
+                                  <span className="activity-pill">{group.locationDistanceKm} km away</span>
+                                )}
+                                {typeof group.recommendationScore === "number" && (
+                                  <span className="activity-pill">Fit {Math.round(group.recommendationScore * 100)}%</span>
+                                )}
                               </div>
                             </div>
                           </article>
@@ -953,14 +972,14 @@ export default function DashboardPage({ user, onLogout }) {
                               <h2>{group.name}</h2>
                               <p>{group.description}</p>
 
-                              <div className="group-tags">
-                                {group.tags.slice(0, 4).map((tag) => (
-                                    <span key={tag} className="group-tag">
-                            <AppIcon name="tag"/>
-                                      {tag}
-                          </span>
-                                ))}
-                              </div>
+                              {group.fieldOfStudy && (
+                                  <div className="group-tags">
+                                    <span className="group-tag">
+                                      <AppIcon name="tag"/>
+                                      {group.fieldOfStudy}
+                                    </span>
+                                  </div>
+                              )}
 
                               <div className="group-footer">
                                 <span className="member-pill">
@@ -1039,16 +1058,6 @@ export default function DashboardPage({ user, onLogout }) {
               </span>
               </div>
               <p className="group-description">{activeGroup.description}</p>
-              {activeGroup.tags.length > 0 && (
-                  <div className="group-tags">
-                    {activeGroup.tags.map((tag) => (
-                        <span key={tag} className="group-tag">
-                    <AppIcon name="tag"/>
-                          {tag}
-                  </span>
-                    ))}
-                  </div>
-              )}
               <div className="hero-actions">
                 <button
                     type="button"
@@ -1087,7 +1096,7 @@ export default function DashboardPage({ user, onLogout }) {
               <article className="detail-card">
                 <h2>Group Details</h2>
                 <ul className="detail-list">
-                  <li>Focus Area: {activeGroup.category}</li>
+                  <li>Field of Study: {activeGroup.fieldOfStudy || "Optional"}</li>
                   <li>Visibility: {activeGroup.visibility === "PRIVATE" ? "Private" : "Public"}</li>
                   <li>Membership Status: {statusText(effectiveStatus)}</li>
                 </ul>
@@ -1560,14 +1569,33 @@ export default function DashboardPage({ user, onLogout }) {
                 </label>
 
                 <label>
-                  Focus Area
-                  <input
-                    type="text"
-                    value={groupFormValues.focusArea}
-                    onChange={(event) => updateGroupFormValue("focusArea", event.target.value)}
-                    maxLength={120}
-                    required
-                  />
+                  Field of Study (optional)
+                  <select
+                    value={groupFormValues.fieldOfStudy}
+                    onChange={(event) => updateGroupFormValue("fieldOfStudy", event.target.value)}
+                  >
+                    <option value="">Select field of study</option>
+                    {FIELD_OF_STUDY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  City or metro area (optional)
+                  <select
+                    value={groupFormValues.locationCity}
+                    onChange={(event) => updateGroupFormValue("locationCity", event.target.value)}
+                  >
+                    <option value="">Select city</option>
+                    {CITY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
 
                 <label>

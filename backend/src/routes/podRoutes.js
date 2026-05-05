@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import { getSupabaseClient } from "../lib/supabase.js";
 import { toPublicUser } from "../utils/users.js";
 import { getCurrentPhase, getPromptForPhase } from "../services/phaseService.js";
+import { CITY_OPTIONS, FIELD_OF_STUDY_OPTIONS } from "../constants/recommendationOptions.js";
 import {
   notifyCelebrationCreated,
   notifyMemberJoined,
@@ -31,6 +32,7 @@ import {
   generateBiweeklySummary,
   hasSummarySourceContent,
 } from "../services/biweeklySummaryService.js";
+import { rankPodsForUser } from "../services/discoveryRecommendationService.js";
 
 const router = Router();
 
@@ -83,7 +85,8 @@ function isBiWeeklyActive(currentDate, weekStartDate) {
 const podCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   description: z.string().trim().min(10).max(500),
-  focusArea: z.string().trim().min(2).max(120),
+  fieldOfStudy: z.enum(FIELD_OF_STUDY_OPTIONS).optional().or(z.literal("")),
+  locationCity: z.enum(CITY_OPTIONS).optional().or(z.literal("")),
   visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
 });
 
@@ -91,7 +94,8 @@ const podUpdateSchema = z
   .object({
     name: z.string().trim().min(2).max(120).optional(),
     description: z.string().trim().min(10).max(500).optional(),
-    focusArea: z.string().trim().min(2).max(120).optional(),
+    fieldOfStudy: z.enum(FIELD_OF_STUDY_OPTIONS).optional().or(z.literal("")),
+    locationCity: z.enum(CITY_OPTIONS).optional().or(z.literal("")),
     visibility: z.enum(["PUBLIC", "PRIVATE"]).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -183,15 +187,16 @@ const NUDGE_QUICK_REPLY_LABELS = {
   lets_chat: "Can we chat?",
 };
 
-function toPodResponse(pod) {
-  const membership = pod.memberships?.[0] || null;
+function toPodResponse(pod, membershipOverride = null) {
+  const membership = membershipOverride || pod.memberships?.[0] || null;
 
   return {
     id: pod.id,
     slug: pod.slug,
     name: pod.name,
     description: pod.description,
-    focusArea: pod.focusArea,
+    fieldOfStudy: pod.fieldOfStudy || null,
+    locationCity: pod.locationCity || null,
     visibility: pod.visibility,
     joinActionLabel: pod.visibility === "PRIVATE" ? "Request To Join" : "Join Group",
     isDefault: pod.isDefault,
@@ -201,6 +206,9 @@ function toPodResponse(pod) {
     memberCount: pod._count?.memberships || 0,
     membershipStatus: membership?.status || null,
     membershipRole: membership?.role || null,
+    recommendationScore: typeof pod.recommendationScore === "number" ? pod.recommendationScore : null,
+    locationDistanceKm: typeof pod.locationDistanceKm === "number" ? pod.locationDistanceKm : null,
+    recommendationReasons: Array.isArray(pod.recommendationReasons) ? pod.recommendationReasons : [],
   };
 }
 
@@ -740,16 +748,44 @@ async function uploadResumePdfToStorage({ podId, requestId, userId, fileName, mi
 
 router.get("/", requireAuth, async (request, response) => {
   try {
+    const currentUser = await prisma.user.findUnique({
+      where: { id: request.user.id },
+      select: {
+        id: true,
+        fieldOfStudy: true,
+        careerStage: true,
+        targetTimeline: true,
+        locationCity: true,
+        preferredGroupSize: true,
+      },
+    });
+
     const pods = await prisma.pod.findMany({
-      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
       include: {
         memberships: {
-          where: { userId: request.user.id },
+          where: { status: "ACTIVE" },
           select: {
+            userId: true,
             role: true,
             status: true,
+            user: {
+              select: {
+                fieldOfStudy: true,
+                careerStage: true,
+                targetTimeline: true,
+              },
+            },
           },
+        },
+        posts: {
+          orderBy: { createdAt: "desc" },
           take: 1,
+          select: { createdAt: true },
+        },
+        podCheckIns: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { createdAt: true },
         },
         _count: {
           select: {
@@ -761,7 +797,29 @@ router.get("/", requireAuth, async (request, response) => {
       },
     });
 
-    return response.status(200).json({ pods: pods.map(toPodResponse) });
+    const currentMemberships = pods.length
+      ? await prisma.podMembership.findMany({
+          where: {
+            podId: { in: pods.map((pod) => pod.id) },
+            userId: request.user.id,
+          },
+          select: {
+            podId: true,
+            role: true,
+            status: true,
+          },
+        })
+      : [];
+
+    const currentMembershipByPodId = new Map(
+      currentMemberships.map((membership) => [membership.podId, membership]),
+    );
+
+    const rankedPods = rankPodsForUser(pods, currentUser);
+
+    return response.status(200).json({
+      pods: rankedPods.map((pod) => toPodResponse(pod, currentMembershipByPodId.get(pod.id) || null)),
+    });
   } catch {
     return response.status(500).json({ message: "Failed to load pods." });
   }
@@ -778,7 +836,8 @@ router.post("/", requireAuth, async (request, response) => {
           slug,
           name: data.name,
           description: data.description,
-          focusArea: data.focusArea,
+          fieldOfStudy: typeof data.fieldOfStudy === "string" && data.fieldOfStudy.trim() ? data.fieldOfStudy.trim() : null,
+          locationCity: typeof data.locationCity === "string" && data.locationCity.trim() ? data.locationCity.trim() : null,
           visibility: data.visibility || "PUBLIC",
           isDefault: false,
           createdById: request.user.id,
@@ -831,6 +890,7 @@ router.patch("/:podId", requireAuth, async (request, response) => {
   try {
     const { podId } = request.params;
     const data = podUpdateSchema.parse(request.body);
+    const locationCity = typeof data.locationCity === "string" && data.locationCity.trim() ? data.locationCity.trim() : null;
 
     const access = await getPodAccessContext(podId, request.user.id);
 
@@ -844,7 +904,13 @@ router.patch("/:podId", requireAuth, async (request, response) => {
 
     await prisma.pod.update({
       where: { id: podId },
-      data,
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(data.fieldOfStudy !== undefined ? { fieldOfStudy: typeof data.fieldOfStudy === "string" && data.fieldOfStudy.trim() ? data.fieldOfStudy.trim() : null } : {}),
+        ...(data.locationCity !== undefined ? { locationCity } : {}),
+        ...(data.visibility !== undefined ? { visibility: data.visibility } : {}),
+      },
     });
 
     const updatedPod = await prisma.pod.findUnique({
@@ -1111,7 +1177,7 @@ router.get("/user/mypods", requireAuth, async (request, response) => {
         slug: m.pod.slug,
         name: m.pod.name,
         description: m.pod.description,
-        focusArea: m.pod.focusArea,
+        fieldOfStudy: m.pod.fieldOfStudy,
         visibility: m.pod.visibility,
         memberCount: m.pod._count.memberships,
         joinedAt: m.joinedAt,

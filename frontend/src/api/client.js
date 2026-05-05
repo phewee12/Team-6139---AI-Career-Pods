@@ -165,7 +165,9 @@ export async function getCurrentUser() {
 }
 
 export async function setupProfile(input) {
-  return request("/users/profile", { method: "PUT", body: input });
+  const result = await request("/users/profile", { method: "PUT", body: input });
+  clearCache("/pods");
+  return result;
 }
 
 export async function getPods() {
