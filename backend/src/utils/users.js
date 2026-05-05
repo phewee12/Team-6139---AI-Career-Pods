@@ -22,6 +22,8 @@ export function toPublicUser(user) {
     fieldOfStudy: user.fieldOfStudy,
     careerStage: user.careerStage,
     targetTimeline: user.targetTimeline,
+    locationCity: user.locationCity,
+    preferredGroupSize: user.preferredGroupSize,
     avatarUrl: user.avatarUrl,
     avatarImageUrl: resolveAvatarImageUrl(user),
     hasAvatarUpload,
@@ -32,5 +34,5 @@ export function toPublicUser(user) {
 }
 
 export function isProfileComplete(user) {
-  return Boolean(user.fieldOfStudy && user.careerStage && user.targetTimeline);
+  return Boolean(user.fieldOfStudy && user.careerStage && user.targetTimeline && user.preferredGroupSize);
 }

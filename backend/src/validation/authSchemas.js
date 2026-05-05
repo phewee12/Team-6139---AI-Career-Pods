@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FIELD_OF_STUDY_OPTIONS, CITY_OPTIONS, PREFERRED_GROUP_SIZE_OPTIONS } from "../constants/recommendationOptions.js";
 
 export const registerSchema = z.object({
   email: z.string().email(),
@@ -12,9 +13,11 @@ export const loginSchema = z.object({
 });
 
 export const profileSetupSchema = z.object({
-  fieldOfStudy: z.string().trim().min(2).max(100),
+  fieldOfStudy: z.enum(FIELD_OF_STUDY_OPTIONS),
   careerStage: z.string().trim().min(2).max(100),
   targetTimeline: z.string().trim().min(2).max(120),
+  locationCity: z.enum(CITY_OPTIONS).optional().or(z.literal("")),
+  preferredGroupSize: z.enum(PREFERRED_GROUP_SIZE_OPTIONS),
   avatarUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
   avatarUploadData: z.string().trim().max(4_000_000).optional().or(z.literal("")),
   avatarUploadContentType: z

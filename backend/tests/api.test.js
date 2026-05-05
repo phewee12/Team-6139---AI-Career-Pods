@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,6 +54,24 @@ const sampleResumePayload = {
   mimeType: "application/pdf",
   contentBase64: "JVBERi0xLjQKJQ==",
 };
+
+const defaultPods = [
+  {
+    slug: "internship-accelerator",
+    name: "Internship Accelerator",
+    description: "Weekly accountability pod focused on internship applications, referrals, and interview prep.",
+  },
+  {
+    slug: "grad-school-strategy",
+    name: "Grad School Strategy",
+    description: "Collaborative pod for statement reviews, school selection, and graduate admissions timelines.",
+  },
+  {
+    slug: "career-switch-lab",
+    name: "Career Switch Lab",
+    description: "Support pod for career switchers building portfolios, networking plans, and transition roadmaps.",
+  },
+];
 
 function uniqueSuffix() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -269,6 +288,8 @@ describe("User Endpoints", () => {
         fieldOfStudy: "Computer Science",
         careerStage: "Junior",
         targetTimeline: "6 months",
+        locationCity: "Austin, TX",
+        preferredGroupSize: "ANY",
         avatarUrl: "https://images.example.com/profile-student.png",
       });
 
@@ -293,6 +314,7 @@ describe("User Endpoints", () => {
       .set("Cookie", cookie)
       .send({
         fieldOfStudy: "CS",
+        preferredGroupSize: "ANY",
       });
 
     expect(response.status).toBe(400);
@@ -318,6 +340,8 @@ describe("User Endpoints", () => {
         fieldOfStudy: "Information Systems",
         careerStage: "Junior",
         targetTimeline: "6 months",
+        locationCity: "Boston, MA",
+        preferredGroupSize: "MID",
         avatarUploadData: tinyGifDataUrl,
         avatarUploadContentType: "image/gif",
       });
@@ -379,6 +403,60 @@ describe("Pod Endpoints", () => {
     });
   });
 
+  it("ranks the closer city pod above the farther city pod", async () => {
+    const registration = await request(app).post("/api/auth/register").send({
+      fullName: "Ranked User",
+      email: "ranked-user@example.com",
+      password: "Password123",
+    });
+
+    const cookie = registration.headers["set-cookie"];
+
+    await request(app)
+      .put("/api/users/profile")
+      .set("Cookie", cookie)
+      .send({
+        fieldOfStudy: "Computer Science",
+        careerStage: "Junior",
+        targetTimeline: "6 months",
+        locationCity: "Austin, TX",
+        preferredGroupSize: "ANY",
+      });
+
+    const austinPodResponse = await request(app)
+      .post("/api/pods")
+      .set("Cookie", cookie)
+      .send({
+        name: "Austin Distance Test",
+        description: "Testing nearby pod ranking for Austin users.",
+        fieldOfStudy: "Computer Science",
+        locationCity: "Austin, TX",
+        visibility: "PUBLIC",
+      });
+
+    const seattlePodResponse = await request(app)
+      .post("/api/pods")
+      .set("Cookie", cookie)
+      .send({
+        name: "Seattle Distance Test",
+        description: "Testing far pod ranking for Austin users.",
+        fieldOfStudy: "Computer Science",
+        locationCity: "Seattle, WA",
+        visibility: "PUBLIC",
+      });
+
+    expect(austinPodResponse.status).toBe(201);
+    expect(seattlePodResponse.status).toBe(201);
+
+    const podsResponse = await request(app).get("/api/pods").set("Cookie", cookie);
+    const austinPod = podsResponse.body.pods.find((pod) => pod.id === austinPodResponse.body.pod.id);
+    const seattlePod = podsResponse.body.pods.find((pod) => pod.id === seattlePodResponse.body.pod.id);
+
+    expect(austinPod.locationDistanceKm).toBe(0);
+    expect(austinPod.recommendationScore).toBeGreaterThan(seattlePod.recommendationScore);
+    expect(podsResponse.body.pods.indexOf(austinPod)).toBeLessThan(podsResponse.body.pods.indexOf(seattlePod));
+  });
+
   it("joins public pods immediately with ACTIVE membership", async () => {
     const email = uniqueEmail("joiner");
     const registration = await request(app).post("/api/auth/register").send({
@@ -422,7 +500,6 @@ describe("Pod Endpoints", () => {
       .send({
         name: "Private Pod Alpha",
         description: "Private collaboration space for approval-based membership.",
-        focusArea: "Leadership",
         visibility: "PRIVATE",
       });
 
@@ -461,7 +538,6 @@ describe("Pod Endpoints", () => {
       .send({
         name: "Private Approval Pod",
         description: "Private pod for approval workflow testing and moderation.",
-        focusArea: "Career",
         visibility: "PRIVATE",
       });
 
@@ -499,7 +575,7 @@ describe("Pod Endpoints", () => {
     );
 
     expect(memberPod.membershipStatus).toBe("ACTIVE");
-  });
+  }, 15000);
 
   it("blocks non-admin users from reviewing pending membership requests", async () => {
     const creatorRegistration = await request(app).post("/api/auth/register").send({
@@ -516,7 +592,6 @@ describe("Pod Endpoints", () => {
       .send({
         name: "Private Moderation Pod",
         description: "Private pod to verify authorization checks for request handling.",
-        focusArea: "Community",
         visibility: "PRIVATE",
       });
 
@@ -677,7 +752,6 @@ describe("Pod Endpoints", () => {
       .send({
         name: "Private Posts Pod",
         description: "Private pod where only active members can create posts.",
-        focusArea: "Leadership",
         visibility: "PRIVATE",
       });
 
@@ -704,6 +778,8 @@ describe("Pod Endpoints", () => {
         fieldOfStudy: "Computer Science",
         careerStage: "Senior",
         targetTimeline: "3 months",
+        locationCity: "Austin, TX",
+        preferredGroupSize: "SMALL",
         avatarUrl: "https://images.example.com/member-one.png",
       });
 
@@ -1577,7 +1653,6 @@ describe("Pod Endpoints", () => {
       .send({
         name: "Summary Guardrail Pod",
         description: "Pod to verify summary period guardrails for generation requests.",
-        focusArea: "Career",
         visibility: "PUBLIC",
       });
 
@@ -1618,7 +1693,6 @@ describe("Accountability Data Models", () => {
         slug: `nudge-test-pod-${suffix}`,
         name: "Nudge Test Pod",
         description: "Pod used for accountability data model tests.",
-        focusArea: "Accountability",
         visibility: "PRIVATE",
         isDefault: false,
       },

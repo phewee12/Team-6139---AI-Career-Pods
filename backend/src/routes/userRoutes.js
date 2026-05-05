@@ -43,11 +43,14 @@ router.put("/profile", requireAuth, async (request, response) => {
   try {
     const data = profileSetupSchema.parse(request.body);
     const avatarUrl = data.avatarUrl?.trim() ? data.avatarUrl.trim() : null;
+    const locationCity = typeof data.locationCity === "string" && data.locationCity.trim() ? data.locationCity.trim() : null;
 
     const updateData = {
       fieldOfStudy: data.fieldOfStudy,
       careerStage: data.careerStage,
       targetTimeline: data.targetTimeline,
+      locationCity,
+      preferredGroupSize: data.preferredGroupSize,
     };
 
     if (data.avatarUploadData && data.avatarUploadContentType) {

@@ -7,7 +7,7 @@ import ProfileSetupPage from "./pages/ProfileSetupPage";
 import "./App.css";
 
 function hasCompletedProfile(user) {
-  return Boolean(user?.fieldOfStudy && user?.careerStage && user?.targetTimeline);
+  return Boolean(user?.fieldOfStudy && user?.careerStage && user?.targetTimeline && user?.preferredGroupSize);
 }
 
 function destinationForUser(user) {

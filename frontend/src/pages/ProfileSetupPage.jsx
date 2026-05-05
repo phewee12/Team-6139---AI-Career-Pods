@@ -1,5 +1,10 @@
 import { useState } from "react";
 import { setupProfile } from "../api/client";
+import {
+  CITY_OPTIONS,
+  FIELD_OF_STUDY_OPTIONS,
+  PREFERRED_GROUP_SIZE_OPTIONS,
+} from "../constants/recommendationOptions";
 
 const stages = ["Freshman", "Sophomore", "Junior", "Senior", "Graduate", "Career Switcher"];
 const timelines = ["3 months", "6 months", "12 months", "18+ months"];
@@ -8,6 +13,8 @@ export default function ProfileSetupPage({ user, onSaved }) {
   const [fieldOfStudy, setFieldOfStudy] = useState(user.fieldOfStudy || "");
   const [careerStage, setCareerStage] = useState(user.careerStage || "");
   const [targetTimeline, setTargetTimeline] = useState(user.targetTimeline || "");
+  const [locationCity, setLocationCity] = useState(user.locationCity || "");
+  const [preferredGroupSize, setPreferredGroupSize] = useState(user.preferredGroupSize || "ANY");
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl || "");
   const [avatarUploadData, setAvatarUploadData] = useState("");
   const [avatarUploadContentType, setAvatarUploadContentType] = useState("");
@@ -71,6 +78,8 @@ export default function ProfileSetupPage({ user, onSaved }) {
         fieldOfStudy,
         careerStage,
         targetTimeline,
+        locationCity,
+        preferredGroupSize,
       };
 
       if (avatarUrl.trim()) {
@@ -103,13 +112,18 @@ export default function ProfileSetupPage({ user, onSaved }) {
         <form className="setup-form" onSubmit={handleSubmit}>
           <label>
             Field of study
-            <input
+            <select
               value={fieldOfStudy}
               onChange={(event) => setFieldOfStudy(event.target.value)}
-              placeholder="Computer Science"
-              maxLength={100}
               required
-            />
+            >
+              <option value="">Select field of study</option>
+              {FIELD_OF_STUDY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
@@ -139,6 +153,36 @@ export default function ProfileSetupPage({ user, onSaved }) {
               {timelines.map((timeline) => (
                 <option key={timeline} value={timeline}>
                   {timeline}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Nearest city or metro area (optional)
+            <select
+              value={locationCity}
+              onChange={(event) => setLocationCity(event.target.value)}
+            >
+              <option value="">Select city</option>
+              {CITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            Preferred group size
+            <select
+              value={preferredGroupSize}
+              onChange={(event) => setPreferredGroupSize(event.target.value)}
+              required
+            >
+              {PREFERRED_GROUP_SIZE_OPTIONS.map((groupSize) => (
+                <option key={groupSize.value} value={groupSize.value}>
+                  {groupSize.label}
                 </option>
               ))}
             </select>

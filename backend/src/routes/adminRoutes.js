@@ -12,21 +12,18 @@ const DEFAULT_PODS = [
     name: "Internship Accelerator",
     description:
       "Weekly accountability pod focused on internship applications, referrals, and interview prep.",
-    focusArea: "Internships",
   },
   {
     slug: "grad-school-strategy",
     name: "Grad School Strategy",
     description:
       "Collaborative pod for statement reviews, school selection, and graduate admissions timelines.",
-    focusArea: "Graduate School",
   },
   {
     slug: "career-switch-lab",
     name: "Career Switch Lab",
     description:
       "Support pod for career switchers building portfolios, networking plans, and transition roadmaps.",
-    focusArea: "Career Change",
   },
 ];
 
@@ -60,7 +57,6 @@ router.post("/test/reset-db", requireAuth, async (request, response) => {
           slug: pod.slug,
           name: pod.name,
           description: pod.description,
-          focusArea: pod.focusArea,
           isDefault: true,
         })),
       });

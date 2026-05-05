@@ -129,7 +129,7 @@ export default function EngagementScore({ podId }) {
                         <li>👥 Resume reviews given (10%)</li>
                         <li>💬 Nudges sent/replied (10%)</li>
                     </ul>
-                    <p className="helper-copy">Scores are normalized on a 0-100 scale and updated weekly.</p>
+                    <p className="helper-copy">Scores are normalized on a 0-100 scale.</p>
                 </div>
             )}
 
