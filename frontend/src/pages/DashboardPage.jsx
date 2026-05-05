@@ -265,6 +265,230 @@ function AvatarBadge({ imageUrl, label, className }) {
   );
 }
 
+function PostCard({ post, user, highlightedPostId, deletingPostId, onDelete }) {
+  const [liked, setLiked] = useState(false);
+  const [likes, setLikes] = useState(0);
+  const [reposted, setReposted] = useState(false);
+  const [reposts, setReposts] = useState(0);
+  const [showComments, setShowComments] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [comments, setComments] = useState([]);
+
+  const isHighlighted = post.id === highlightedPostId;
+  const isOwn = post.authorId === user.id;
+
+  function handleLike() {
+    setLiked((p) => !p);
+    setLikes((p) => (liked ? p - 1 : p + 1));
+  }
+
+  function handleRepost() {
+    setReposted((p) => !p);
+    setReposts((p) => (reposted ? p - 1 : p + 1));
+  }
+
+  function handleAddComment() {
+    const text = commentDraft.trim();
+    if (!text) return;
+    setComments((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        author: user.fullName || user.email || "You",
+        text,
+        timestamp: new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
+      },
+    ]);
+    setCommentDraft("");
+  }
+
+  return (
+    <article
+      id={`post-${post.id}`}
+      style={{
+        background: "#fff",
+        border: isHighlighted ? "1.5px solid #378ADD" : "0.5px solid rgba(0,0,0,0.09)",
+        borderRadius: "12px",
+        overflow: "hidden",
+        marginBottom: "10px",
+        transition: "border-color 0.3s",
+      }}
+    >
+      {/* Post header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <AvatarBadge
+            key={post.author?.id || post.id}
+            className="feed-author-avatar"
+            imageUrl={post.author?.avatarImageUrl || post.author?.avatarUrl || ""}
+            label={post.author?.fullName || post.author?.email || "Member"}
+          />
+          <div>
+            <p style={{ fontSize: "13px", fontWeight: 500, margin: 0, color: "inherit" }}>
+              {post.author?.fullName || post.author?.email || "Member"}
+            </p>
+            <p style={{ fontSize: "11px", color: "#999", margin: 0 }}>
+              {formatPostTimestamp(post.createdAt)}
+            </p>
+          </div>
+        </div>
+        {isOwn && (
+          <button
+            type="button"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "11px",
+              color: "#bbb",
+              padding: "4px 8px",
+              borderRadius: "6px",
+            }}
+            disabled={deletingPostId === post.id}
+            onClick={() => onDelete(post.id)}
+          >
+            {deletingPostId === post.id ? "Deleting..." : "Delete"}
+          </button>
+        )}
+      </div>
+
+      {/* Post body */}
+      <p style={{ fontSize: "14px", lineHeight: 1.6, padding: "10px 16px 14px", margin: 0, color: "inherit" }}>
+        {post.content}
+      </p>
+
+      {/* Action bar */}
+      <div style={{
+        borderTop: "0.5px solid rgba(0,0,0,0.07)",
+        padding: "6px 10px",
+        display: "flex",
+        alignItems: "center",
+        gap: "2px",
+      }}>
+        {/* Like */}
+        <button
+          type="button"
+          onClick={handleLike}
+          style={{
+            display: "flex", alignItems: "center", gap: "5px",
+            background: "none", border: "none", cursor: "pointer",
+            padding: "6px 10px", borderRadius: "8px",
+            fontSize: "12px", color: liked ? "#E24B4A" : "#999",
+            transition: "background 0.15s",
+          }}
+          aria-label={liked ? "Unlike" : "Like"}
+        >
+          {liked ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#E24B4A" stroke="#E24B4A" strokeWidth="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
+          )}
+          {likes > 0 && <span>{likes}</span>}
+        </button>
+
+        {/* Comment */}
+        <button
+          type="button"
+          onClick={() => setShowComments((p) => !p)}
+          style={{
+            display: "flex", alignItems: "center", gap: "5px",
+            background: "none", border: "none", cursor: "pointer",
+            padding: "6px 10px", borderRadius: "8px",
+            fontSize: "12px", color: showComments ? "#378ADD" : "#999",
+            transition: "background 0.15s",
+          }}
+          aria-label="Comment"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          {comments.length > 0 && <span>{comments.length}</span>}
+        </button>
+
+        {/* Repost */}
+        <button
+          type="button"
+          onClick={handleRepost}
+          style={{
+            display: "flex", alignItems: "center", gap: "5px",
+            background: "none", border: "none", cursor: "pointer",
+            padding: "6px 10px", borderRadius: "8px",
+            fontSize: "12px", color: reposted ? "#1D9E75" : "#999",
+            transition: "background 0.15s",
+          }}
+          aria-label={reposted ? "Undo repost" : "Repost"}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={reposted ? "#1D9E75" : "currentColor"} strokeWidth="2">
+            <polyline points="17 1 21 5 17 9"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <polyline points="7 23 3 19 7 15"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+          {reposts > 0 && <span>{reposts}</span>}
+        </button>
+      </div>
+
+      {/* Comments section */}
+      {showComments && (
+        <div style={{ borderTop: "0.5px solid rgba(0,0,0,0.07)", padding: "12px 16px", background: "rgba(0,0,0,0.015)" }}>
+          {comments.length > 0 && (
+            <div style={{ marginBottom: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              {comments.map((c) => (
+                <div key={c.id} style={{ display: "flex", gap: "8px" }}>
+                  <div style={{
+                    width: "26px", height: "26px", borderRadius: "50%",
+                    background: "#E6F1FB", color: "#185FA5",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: "11px", fontWeight: 500, flexShrink: 0,
+                  }}>
+                    {c.author.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ background: "#fff", border: "0.5px solid rgba(0,0,0,0.08)", borderRadius: "8px", padding: "6px 10px", flex: 1 }}>
+                    <p style={{ fontSize: "12px", fontWeight: 500, margin: "0 0 2px", color: "inherit" }}>{c.author}</p>
+                    <p style={{ fontSize: "12px", margin: 0, color: "inherit" }}>{c.text}</p>
+                    <p style={{ fontSize: "10px", color: "#bbb", margin: "3px 0 0" }}>{c.timestamp}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <input
+              type="text"
+              value={commentDraft}
+              onChange={(e) => setCommentDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+              placeholder="Write a comment..."
+              style={{
+                flex: 1, fontSize: "13px", padding: "7px 12px",
+                border: "0.5px solid rgba(0,0,0,0.15)", borderRadius: "20px",
+                background: "#fff", outline: "none", color: "inherit",
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleAddComment}
+              disabled={!commentDraft.trim()}
+              style={{
+                background: "#378ADD", color: "#fff", border: "none",
+                borderRadius: "20px", padding: "7px 14px", fontSize: "12px",
+                cursor: commentDraft.trim() ? "pointer" : "default",
+                opacity: commentDraft.trim() ? 1 : 0.5,
+              }}
+            >
+              Post
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function DashboardPage({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState("groups");
   const [activeTab, setActiveTab] = useState("discover");
@@ -1141,8 +1365,163 @@ export default function DashboardPage({ user, onLogout }) {
     );
   }
 
+<<<<<<< Updated upstream
 const renderGroupFeedView = () => {
   if (!activeGroup) {
+=======
+  function renderGroupFeedView() {
+    if (!activeGroup) {
+      return (
+          <div className="empty-state">
+            <h2>Feed not available</h2>
+            <p>Please return to the group page and open the feed again.</p>
+          </div>
+      );
+    }
+
+    const membershipStatus = getGroupMembershipStatus(activeGroup);
+    const canPost = membershipStatus === "ACTIVE";
+    const postsLoading = postsLoadingByGroup[activeGroup.id] === true;
+    const canLeaveGroup = membershipStatus === "ACTIVE" || membershipStatus === "PENDING";
+    const featureNavItems = [
+      { id: "feed", label: "Feed", icon: "message" },
+      { id: "biweekly", label: "Bi-Weekly Progress", icon: "calendar" },
+      { id: "summary", label: "Bi-Weekly AI Summary", icon: "sparkles" },
+      { id: "resume", label: "Resume Review", icon: "briefcase" },
+      { id: "members", label: "Members", icon: "users" },
+    ];
+
+    function renderFeatureContent() {
+      if (activeGroupFeature === "biweekly") {
+        return (
+          <>
+            <header className="feature-page-header">
+              <h2>Bi-Weekly Progress</h2>
+              <p className="helper-copy">Track rituals, accountability, and momentum for this pod.</p>
+            </header>
+            <ProgressDashboard podId={activeGroup.id}/>
+            <CelebrationFeed podId={activeGroup.id}/>
+            <BiWeeklyRituals podId={activeGroup.id} user={user}/>
+          </>
+        );
+      }
+
+      if (activeGroupFeature === "resume") {
+        return (
+          <ResumeReviewPanel
+            podId={activeGroup.id}
+            user={user}
+            isAdmin={activeGroup.membershipRole === "ADMIN" || activeGroup.membershipRole === "OWNER"}
+          />
+        );
+      }
+
+      if (activeGroupFeature === "summary") {
+        return <BiweeklySummaryPanel podId={activeGroup.id} />;
+      }
+
+      if (activeGroupFeature === "members") {
+        return (
+          <article className="detail-card members-feature-card">
+            <header className="feature-page-header">
+              <h2>Members & accountability</h2>
+              <p className="helper-copy">
+                Supportive nudges, a private scorecard, and quiet mode—without pressure or shame.
+              </p>
+            </header>
+            <MembersFeatureSection
+              podId={activeGroup.id}
+              user={user}
+              currentMembershipRole={activeGroup.membershipRole}
+            />
+          </article>
+        );
+      }
+
+      return (
+        <>
+          {postSuccessMessage && (
+              <p className="success-toast" role="status" aria-live="polite">
+                {postSuccessMessage}
+              </p>
+          )}
+
+          <article className="detail-card composer-card">
+            {canPost ? (
+                <>
+              <textarea
+                  className="composer-input"
+                  value={postDraft}
+                  onChange={(event) => setPostDraft(event.target.value)}
+                  placeholder="Share an update with this group..."
+                  rows={4}
+                  maxLength={2000}
+              />
+                  <div className="composer-actions">
+                    <small>{postDraft.trim().length}/2000</small>
+                    <button
+                        type="button"
+                        className="secondary-action"
+                        disabled={postingPodId === activeGroup.id || postDraft.trim().length === 0}
+                        onClick={handleCreatePost}
+                    >
+                      {postingPodId === activeGroup.id ? "Posting..." : "Create Post"}
+                    </button>
+                  </div>
+                </>
+            ) : (
+                <p className="helper-copy">Join this group as an active member to create posts.</p>
+            )}
+            {postActionError && <p className="error-banner">{postActionError}</p>}
+          </article>
+
+          {feedTagOptions.length > 1 && (
+              <article className="detail-card">
+                <div className="filter-label">
+                  <AppIcon name="filter"/>
+                  <span>Filter by tag:</span>
+                </div>
+                <div className="feed-tag-row">
+                  {feedTagOptions.map((tag) => (
+                      <button
+                          key={tag}
+                          type="button"
+                          className={feedTagFilter === tag ? "feed-tag active" : "feed-tag"}
+                          onClick={() => setFeedTagFilter(tag)}
+                      >
+                        {tag}
+                      </button>
+                  ))}
+                </div>
+              </article>
+          )}
+
+          {postsLoading ? (
+              <article className="detail-card">
+                <p className="helper-copy">Loading posts...</p>
+              </article>
+          ) : filteredFeedPosts.length > 0 ? (
+              filteredFeedPosts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  user={user}
+                  highlightedPostId={highlightedPostId}
+                  deletingPostId={deletingPostId}
+                  onDelete={handleDeletePost}
+                />
+              ))
+          ) : (
+              <article className="detail-card">
+                <h2>No posts yet</h2>
+                <p className="helper-copy">This group has no posts yet.</p>
+              </article>
+          )}
+        </>
+      );
+    }
+
+>>>>>>> Stashed changes
     return (
       <div className="empty-state">
         <h2>Feed not available</h2>
