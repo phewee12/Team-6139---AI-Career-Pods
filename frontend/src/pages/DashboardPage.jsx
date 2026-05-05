@@ -22,8 +22,6 @@ import NotificationBell from "../components/NotificationBell";
 import ResumeReviewPanel from "../components/ResumeReviewPanel";
 import EngagementScore from "../components/EngagementScore";
 import BiweeklySummaryPanel from "../components/BiweeklySummaryPanel";
-import EnhancedPostCard from "../components/EnhancedPostCard";
-
 
 const NAV_ITEMS = [
   { id: "onboarding", label: "Onboarding", icon: "sparkles" },
@@ -1365,10 +1363,6 @@ export default function DashboardPage({ user, onLogout }) {
     );
   }
 
-<<<<<<< Updated upstream
-const renderGroupFeedView = () => {
-  if (!activeGroup) {
-=======
   function renderGroupFeedView() {
     if (!activeGroup) {
       return (
@@ -1521,287 +1515,111 @@ const renderGroupFeedView = () => {
       );
     }
 
->>>>>>> Stashed changes
     return (
-      <div className="empty-state">
-        <h2>Feed not available</h2>
-        <p>Please return to the group page and open the feed again.</p>
-      </div>
-    );
-  }
-
-  const membershipStatus = getGroupMembershipStatus(activeGroup);
-  const canPost = membershipStatus === "ACTIVE";
-  const postsLoading = postsLoadingByGroup[activeGroup.id] === true;
-  const canLeaveGroup = membershipStatus === "ACTIVE" || membershipStatus === "PENDING";
-  
-  const featureNavItems = [
-    { id: "feed", label: "Feed", icon: "message" },
-    { id: "biweekly", label: "Bi-Weekly Progress", icon: "calendar" },
-    { id: "summary", label: "Bi-Weekly AI Summary", icon: "sparkles" },
-    { id: "resume", label: "Resume Review", icon: "briefcase" },
-    { id: "members", label: "Members", icon: "users" },
-  ];
-
-  function renderFeatureContent() {
-    if (activeGroupFeature === "biweekly") {
-      return (
         <>
-          <header className="feature-page-header">
-            <h2>Bi-Weekly Progress</h2>
-            <p className="helper-copy">Track rituals, accountability, and momentum for this pod.</p>
-          </header>
-          <ProgressDashboard podId={activeGroup.id}/>
-          <CelebrationFeed podId={activeGroup.id}/>
-          <BiWeeklyRituals podId={activeGroup.id} user={user}/>
-        </>
-      );
-    }
+          <button type="button" className="inline-back" onClick={() => setGroupView("detail")}>
+            <AppIcon name="arrow-left"/>
+            Back to Group
+          </button>
 
-    if (activeGroupFeature === "resume") {
-      return (
-        <ResumeReviewPanel
-          podId={activeGroup.id}
-          user={user}
-          isAdmin={activeGroup.membershipRole === "ADMIN" || activeGroup.membershipRole === "OWNER"}
-        />
-      );
-    }
-
-    if (activeGroupFeature === "summary") {
-      return <BiweeklySummaryPanel podId={activeGroup.id} />;
-    }
-
-    if (activeGroupFeature === "members") {
-      return (
-        <article className="detail-card members-feature-card">
-          <header className="feature-page-header">
-            <h2>Members & accountability</h2>
-            <p className="helper-copy">
-              Supportive nudges, a private scorecard, and quiet mode—without pressure or shame.
-            </p>
-          </header>
-          <MembersFeatureSection
-            podId={activeGroup.id}
-            user={user}
-            currentMembershipRole={activeGroup.membershipRole}
-          />
-        </article>
-      );
-    }
-
-    // Feed view
-    return (
-      <>
-        {/* Enhanced Post Composer */}
-        {canPost && (
-          <div className="post-composer-enhanced">
-            <div className="composer-header">
-              <div className="composer-avatar">
-                {user.avatarImageUrl ? (
-                  <img src={user.avatarImageUrl} alt="" />
-                ) : (
-                  (user.fullName || user.email || "U").charAt(0).toUpperCase()
-                )}
-              </div>
-              <div className="composer-input-wrapper">
-                <input
-                  type="text"
-                  placeholder="What's on your mind?"
-                  className="composer-title-input"
-                  value={postTitle || ""}
-                  onChange={(e) => setPostTitle(e.target.value)}
-                />
-                <textarea
-                  placeholder="Share your thoughts with the community..."
-                  className="composer-content-input"
-                  rows={3}
-                  value={postDraft}
-                  onChange={(e) => setPostDraft(e.target.value)}
-                />
-              </div>
+          <header className="feed-header">
+            <div>
+              <h1 className="group-title">{activeGroup.name}</h1>
+              <p className="helper-copy">Group features</p>
             </div>
-            <div className="composer-footer">
-              <button 
-                className="composer-post-btn"
-                disabled={!postDraft.trim() || postingPodId === activeGroup.id}
-                onClick={handleCreatePost}
+            <div className="feed-actions">
+              {canLeaveGroup && (
+                  <button
+                      type="button"
+                      className="secondary-action danger-action"
+                      disabled={leavingPodId === activeGroup.id}
+                      onClick={() => handleLeaveGroup(activeGroup.id)}
+                  >
+                    {leavingPodId === activeGroup.id
+                        ? "Leaving..."
+                        : membershipStatus === "PENDING"
+                            ? "Cancel Request"
+                            : "Leave Group"}
+                  </button>
+              )}
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={!isSettingsManager(activeGroup)}
+                onClick={openGroupSettingsForm}
               >
-                {postingPodId === activeGroup.id ? "Posting..." : "Post"}
+                Group Settings
               </button>
             </div>
-          </div>
-        )}
+          </header>
 
-        {postSuccessMessage && (
-          <p className="success-toast" role="status" aria-live="polite">
-            {postSuccessMessage}
-          </p>
-        )}
+          <section className="feed-layout">
+            <div className="feed-main-column">
+              {renderFeatureContent()}
+            </div>
 
-        {postActionError && <p className="error-banner">{postActionError}</p>}
+            <aside className="feed-sidebar-column">
+              <EngagementScore podId={activeGroup.id} />
+              
+              <article className="detail-card compact feature-nav-card">
+                <h2>Group Features</h2>
+                <div className="feature-list">
+                  {featureNavItems.map((feature) => (
+                    <button
+                      key={feature.id}
+                      type="button"
+                      className={activeGroupFeature === feature.id ? "feature-pill active" : "feature-pill"}
+                      onClick={() => {
+                        void openGroupFeature(feature.id, activeGroup.id);
+                      }}
+                    >
+                      <AppIcon name={feature.icon}/>
+                      {feature.label}
+                    </button>
+                  ))}
+                </div>
+              </article>
 
-        {/* Posts Feed */}
-        {postsLoading ? (
-          <div className="helper-copy">Loading posts...</div>
-        ) : filteredFeedPosts.length > 0 ? (
-          filteredFeedPosts.map(post => (
-            <EnhancedPostCard
-              key={post.id}
-              post={post}
-              podId={activeGroup.id}
-              currentUserId={user.id}
-              onPostUpdate={() => loadGroupPosts(activeGroup.id)}
-            />
-          ))
-        ) : (
-          <article className="detail-card">
-            <h2>No posts yet</h2>
-            <p className="helper-copy">Be the first to share something with the community!</p>
-          </article>
-        )}
-      </>
+              <article className="detail-card compact">
+                <h2>This Week</h2>
+                <p className="stat-line split">
+                  <span>Members</span>
+                  <span>{activeGroup.members}</span>
+                </p>
+                <p className="stat-line split">
+                  <span>Admins</span>
+                  <span>{activeGroup.adminCount}</span>
+                </p>
+                <p className="stat-line split">
+                  <span>Posts</span>
+                  <span>{activeGroupPosts.length}</span>
+                </p>
+              </article>
+
+              <article className="detail-card compact group-about-card">
+                <h2>About Group</h2>
+                <p>
+                  {activeGroup.members > 0
+                      ? `${activeGroup.members.toLocaleString()} members`
+                      : "No members yet."}
+                </p>
+                <p>{activeGroup.visibility === "PRIVATE" ? "Private group" : "Public group"}</p>
+                <p>Created {activeGroup.createdAt}</p>
+              </article>
+
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={!isSettingsManager(activeGroup)}
+                onClick={openGroupSettingsForm}
+              >
+                Group Settings
+              </button>
+            </aside>
+          </section>
+        </>
     );
   }
-
-  return (
-    <>
-      <button type="button" className="inline-back" onClick={() => setGroupView("detail")}>
-        <AppIcon name="arrow-left"/>
-        Back to Group
-      </button>
-
-      <header className="feed-header">
-        <div>
-          <h1 className="group-title">{activeGroup.name}</h1>
-          <p className="helper-copy">Group features</p>
-        </div>
-        <div className="feed-actions">
-          {canLeaveGroup && (
-            <button
-              type="button"
-              className="secondary-action danger-action"
-              disabled={leavingPodId === activeGroup.id}
-              onClick={() => handleLeaveGroup(activeGroup.id)}
-            >
-              {leavingPodId === activeGroup.id
-                ? "Leaving..."
-                : membershipStatus === "PENDING"
-                  ? "Cancel Request"
-                  : "Leave Group"}
-            </button>
-          )}
-          <button
-            type="button"
-            className="secondary-action"
-            disabled={!isSettingsManager(activeGroup)}
-            onClick={openGroupSettingsForm}
-          >
-            Group Settings
-          </button>
-        </div>
-      </header>
-
-      <section className="feed-layout">
-        <div className="feed-main-column">
-          {renderFeatureContent()}
-        </div>
-
-        <aside className="feed-sidebar-column">
-          <EngagementScore podId={activeGroup.id} />
-          
-          <article className="detail-card compact feature-nav-card">
-            <h2>Group Features</h2>
-            <div className="feature-list">
-              {featureNavItems.map((feature) => (
-                <button
-                  key={feature.id}
-                  type="button"
-                  className={activeGroupFeature === feature.id ? "feature-pill active" : "feature-pill"}
-                  onClick={() => {
-                    void openGroupFeature(feature.id, activeGroup.id);
-                  }}
-                >
-                  <AppIcon name={feature.icon}/>
-                  {feature.label}
-                </button>
-              ))}
-            </div>
-          </article>
-
-          <article className="detail-card compact">
-            <h2>This Week</h2>
-            <p className="stat-line split">
-              <span>Members</span>
-              <span>{activeGroup.members}</span>
-            </p>
-            <p className="stat-line split">
-              <span>Admins</span>
-              <span>{activeGroup.adminCount}</span>
-            </p>
-            <p className="stat-line split">
-              <span>Posts</span>
-              <span>{activeGroupPosts.length}</span>
-            </p>
-          </article>
-
-          <article className="detail-card compact group-about-card">
-            <h2>About Group</h2>
-            <p>
-              {activeGroup.members > 0
-                ? `${activeGroup.members.toLocaleString()} members`
-                : "No members yet."}
-            </p>
-            <p>{activeGroup.visibility === "PRIVATE" ? "Private group" : "Public group"}</p>
-            <p>Created {activeGroup.createdAt}</p>
-          </article>
-
-          <button
-            type="button"
-            className="secondary-action"
-            disabled={!isSettingsManager(activeGroup)}
-            onClick={openGroupSettingsForm}
-          >
-            Group Settings
-          </button>
-        </aside>
-      </section>
-    </>
-  );
-};
-
-// Also add postTitle state near other state declarations:
-const [postTitle, setPostTitle] = useState("");
-
-// Update handleCreatePost to include title:
-async function handleCreatePost() {
-  if (!activeGroup || !postDraft.trim()) {
-    return;
-  }
-
-  const content = postDraft.trim();
-  const title = postTitle.trim();
-  setPostingPodId(activeGroup.id);
-  setPostActionError("");
-
-  try {
-    const result = await createPodPost(activeGroup.id, { content, title: title || undefined });
-    setPostsByGroup((current) => ({
-      ...current,
-      [activeGroup.id]: [result.post, ...(current[activeGroup.id] || [])],
-    }));
-    setPostDraft("");
-    setPostTitle("");
-    setPostSuccessMessage("Post published.");
-    setScrollToPostGroupId(activeGroup.id);
-    setScrollToPostId(result.post.id);
-  } catch (error) {
-    setPostActionError(error.message || "Could not create post.");
-    setPostSuccessMessage("");
-  } finally {
-    setPostingPodId(null);
-  }
-}
 
   function renderGroupsContent() {
     if (groupView === "detail") return renderGroupDetailView();
